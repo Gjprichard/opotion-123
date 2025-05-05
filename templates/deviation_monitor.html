@@ -602,14 +602,28 @@
             const data = await response.json();
             
             if (response.ok) {
-                deviationData = data;
-                createDeviationChart(data);
-                updateDeviationTable(data);
-                createExchangeComparisonCharts(data);
+                // 限制处理的数据量以提高性能
+                const limitedData = data.length > 500 ? data.slice(0, 500) : data;
+                deviationData = data; // 保存完整数据用于导出
                 
-                if (showToastOnSuccess) {
-                    showToast('Data refreshed successfully', 'success');
-                }
+                // 使用 requestAnimationFrame 来优化渲染性能
+                requestAnimationFrame(() => {
+                    createDeviationChart(limitedData);
+                    
+                    // 延迟渲染其他图表和表格
+                    setTimeout(() => {
+                        updateDeviationTable(limitedData);
+                        
+                        // 进一步延迟渲染比较图表
+                        setTimeout(() => {
+                            createExchangeComparisonCharts(limitedData);
+                            
+                            if (showToastOnSuccess) {
+                                showToast('Data refreshed successfully', 'success');
+                            }
+                        }, 100);
+                    }, 100);
+                });
             } else {
                 console.error('Error fetching deviation data:', data.message);
                 showToast(`Error loading data: ${data.message}`, 'danger');
@@ -621,14 +635,22 @@
     }
     
     function createDeviationChart(data) {
+        // 优化: 如果数据量太大，采样以提高性能
+        let chartData = data;
+        if (data.length > 200) {
+            // 对数据进行采样，最多显示200个点
+            const sampleRate = Math.ceil(data.length / 200);
+            chartData = data.filter((_, index) => index % sampleRate === 0);
+        }
+        
         // Sort data by timestamp
-        data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        chartData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         
         // Extract data for chart
-        const timestamps = data.map(item => item.timestamp);
-        const deviationPercents = data.map(item => item.deviation_percent);
-        const volumeChanges = data.map(item => item.volume_change_percent || 0);
-        const premiumChanges = data.map(item => item.premium_change_percent || 0);
+        const timestamps = chartData.map(item => item.timestamp);
+        const deviationPercents = chartData.map(item => item.deviation_percent);
+        const volumeChanges = chartData.map(item => item.volume_change_percent || 0);
+        const premiumChanges = chartData.map(item => item.premium_change_percent || 0);
         
         // Create chart
         const ctx = document.getElementById('deviation-chart').getContext('2d');
@@ -650,7 +672,9 @@
                         backgroundColor: 'rgba(78, 115, 223, 0.1)',
                         fill: true,
                         tension: 0.4,
-                        yAxisID: 'y'
+                        yAxisID: 'y',
+                        pointRadius: chartData.length > 50 ? 0 : 3, // 数据点过多时不显示点
+                        borderWidth: 2
                     },
                     {
                         label: 'Volume Change %',
@@ -659,7 +683,9 @@
                         backgroundColor: 'rgba(28, 200, 138, 0.1)',
                         fill: true,
                         tension: 0.4,
-                        yAxisID: 'y1'
+                        yAxisID: 'y1',
+                        pointRadius: chartData.length > 50 ? 0 : 3,
+                        borderWidth: 2
                     },
                     {
                         label: 'Premium Change %',
@@ -668,13 +694,18 @@
                         backgroundColor: 'rgba(246, 194, 62, 0.1)',
                         fill: true,
                         tension: 0.4,
-                        yAxisID: 'y1'
+                        yAxisID: 'y1',
+                        pointRadius: chartData.length > 50 ? 0 : 3,
+                        borderWidth: 2
                     }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: {
+                    duration: 0 // 关闭动画提高性能
+                },
                 interaction: {
                     mode: 'index',
                     intersect: false
@@ -685,13 +716,26 @@
                     },
                     tooltip: {
                         mode: 'index',
-                        intersect: false
+                        intersect: false,
+                        enabled: true,
+                        callbacks: {
+                            // 限制小数位数提高性能
+                            label: function(context) {
+                                let value = context.raw;
+                                if (typeof value === 'number') {
+                                    value = value.toFixed(2);
+                                }
+                                return `${context.dataset.label}: ${value}`;
+                            }
+                        }
                     }
                 },
                 scales: {
                     x: {
                         ticks: {
-                            maxTicksLimit: 10
+                            maxTicksLimit: 10,
+                            maxRotation: 0, // 提高性能
+                            autoSkipPadding: 10
                         }
                     },
                     y: {
@@ -701,6 +745,9 @@
                         title: {
                             display: true,
                             text: 'Deviation %'
+                        },
+                        ticks: {
+                            maxTicksLimit: 8 // 限制刻度数量
                         }
                     },
                     y1: {
@@ -710,6 +757,9 @@
                         title: {
                             display: true,
                             text: 'Change %'
+                        },
+                        ticks: {
+                            maxTicksLimit: 8 // 限制刻度数量
                         },
                         grid: {
                             drawOnChartArea: false
@@ -724,41 +774,60 @@
         const tableBody = document.getElementById('deviation-table-body');
         tableBody.innerHTML = '';
         
-        data.forEach(item => {
-            const row = document.createElement('tr');
+        // 优化：对数据进行分页或限制显示的行数
+        const maxRows = 100; // 最多显示100行数据
+        const displayData = data.length > maxRows ? data.slice(0, maxRows) : data;
+        
+        // 优化：使用DocumentFragment来提高DOM操作性能
+        const fragment = document.createDocumentFragment();
+        
+        // 创建一个静态HTML字符串，而不是多次操作DOM
+        const rowsHTML = displayData.map(item => {
+            let levelClass = '';
+            let statusBadge = '<span class="badge bg-success">Normal</span>';
             
-            // Add anomaly highlighting
             if (item.is_anomaly) {
-                const levelClass = item.anomaly_level === 'attention' ? 'info' : 
-                                  item.anomaly_level === 'warning' ? 'warning' : 'danger';
-                row.classList.add(`table-${levelClass}`);
+                levelClass = item.anomaly_level === 'attention' ? 'table-info' : 
+                             item.anomaly_level === 'warning' ? 'table-warning' : 'table-danger';
+                statusBadge = `<span class="badge bg-${item.anomaly_level === 'attention' ? 'info' : (item.anomaly_level === 'warning' ? 'warning' : 'danger')}">
+                    ${item.anomaly_level.charAt(0).toUpperCase() + item.anomaly_level.slice(1)}
+                </span>`;
             }
             
-            row.innerHTML = `
-                <td>${item.timestamp}</td>
-                <td>${item.symbol}</td>
-                <td>${item.exchange}</td>
-                <td>${item.strike_price}</td>
-                <td>${item.market_price}</td>
-                <td>${item.deviation_percent.toFixed(2)}%</td>
-                <td>${item.option_type.toUpperCase()}</td>
-                <td>${item.expiration_date}</td>
-                <td>${item.volume}</td>
-                <td>${item.volume_change_percent ? item.volume_change_percent.toFixed(2) + '%' : '-'}</td>
-                <td>${item.premium}</td>
-                <td>${item.premium_change_percent ? item.premium_change_percent.toFixed(2) + '%' : '-'}</td>
-                <td>${item.market_price_change_percent ? item.market_price_change_percent.toFixed(2) + '%' : '-'}</td>
-                <td>
-                    ${item.is_anomaly ? 
-                      `<span class="badge bg-${item.anomaly_level === 'attention' ? 'info' : (item.anomaly_level === 'warning' ? 'warning' : 'danger')}">
-                          ${item.anomaly_level.charAt(0).toUpperCase() + item.anomaly_level.slice(1)}
-                       </span>` : 
-                      '<span class="badge bg-success">Normal</span>'}
+            return `
+                <tr class="${levelClass}">
+                    <td>${item.timestamp}</td>
+                    <td>${item.symbol}</td>
+                    <td>${item.exchange}</td>
+                    <td>${item.strike_price}</td>
+                    <td>${item.market_price}</td>
+                    <td>${item.deviation_percent.toFixed(2)}%</td>
+                    <td>${item.option_type.toUpperCase()}</td>
+                    <td>${item.expiration_date}</td>
+                    <td>${item.volume}</td>
+                    <td>${item.volume_change_percent ? item.volume_change_percent.toFixed(2) + '%' : '-'}</td>
+                    <td>${item.premium}</td>
+                    <td>${item.premium_change_percent ? item.premium_change_percent.toFixed(2) + '%' : '-'}</td>
+                    <td>${item.market_price_change_percent ? item.market_price_change_percent.toFixed(2) + '%' : '-'}</td>
+                    <td>${statusBadge}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        // 一次性更新DOM
+        tableBody.innerHTML = rowsHTML;
+        
+        // 如果数据被截断，添加提示信息
+        if (data.length > maxRows) {
+            const infoRow = document.createElement('tr');
+            infoRow.innerHTML = `
+                <td colspan="14" class="text-center text-muted">
+                    <i class="fas fa-info-circle"></i> 
+                    显示前 ${maxRows} 条记录，共 ${data.length} 条。导出CSV可获取全部数据。
                 </td>
             `;
-            
-            tableBody.appendChild(row);
-        });
+            tableBody.appendChild(infoRow);
+        }
     }
     
     function acknowledgeAlert(alertId) {
@@ -961,12 +1030,24 @@
     function createVolumeDistributionChart(data, exchanges) {
         const ctx = document.getElementById('volume-distribution-chart').getContext('2d');
         
-        // 计算每个交易所的总成交量
+        // 性能优化：数据聚合和计算
         const volumeData = {};
         let totalVolume = 0;
         
+        // 使用Map对数据进行预处理，这比多次filter更高效
+        const exchangeDataMap = new Map();
+        exchanges.forEach(exchange => exchangeDataMap.set(exchange, []));
+        
+        // 单次遍历填充Map
+        data.forEach(item => {
+            if (exchangeDataMap.has(item.exchange)) {
+                exchangeDataMap.get(item.exchange).push(item);
+            }
+        });
+        
+        // 计算每个交易所的总成交量
         exchanges.forEach(exchange => {
-            const exchangeData = data.filter(item => item.exchange === exchange);
+            const exchangeData = exchangeDataMap.get(exchange);
             const volume = exchangeData.reduce((sum, item) => sum + item.volume, 0);
             volumeData[exchange] = volume;
             totalVolume += volume;
@@ -1005,9 +1086,16 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: {
+                    duration: 0 // 关闭动画提高性能
+                },
                 plugins: {
                     legend: {
-                        position: 'bottom'
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12, // 减小图例尺寸提高性能
+                            padding: 10
+                        }
                     },
                     tooltip: {
                         callbacks: {
@@ -1025,11 +1113,24 @@
     function createPremiumSpreadChart(data, exchanges) {
         const ctx = document.getElementById('premium-spread-chart').getContext('2d');
         
+        // 优化：使用与成交量图表相同的预处理Map
+        const exchangeDataMap = new Map();
+        exchanges.forEach(exchange => exchangeDataMap.set(exchange, []));
+        
+        // 单次遍历填充Map（如果之前没有创建过）
+        if (data.forEach && typeof data.forEach === 'function' && data.length > 0 && !exchangeDataMap.get(exchanges[0]).length) {
+            data.forEach(item => {
+                if (exchangeDataMap.has(item.exchange)) {
+                    exchangeDataMap.get(item.exchange).push(item);
+                }
+            });
+        }
+        
         // 计算每个交易所的平均权利金
         const premiumData = {};
         exchanges.forEach(exchange => {
-            const exchangeData = data.filter(item => item.exchange === exchange);
-            if (exchangeData.length > 0) {
+            const exchangeData = exchangeDataMap.get(exchange);
+            if (exchangeData && exchangeData.length > 0) {
                 const avgPremium = exchangeData.reduce((sum, item) => sum + item.premium, 0) / exchangeData.length;
                 premiumData[exchange] = parseFloat(avgPremium.toFixed(2));
             } else {
@@ -1065,16 +1166,30 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: {
+                    duration: 0 // 关闭动画提高性能
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
                         title: {
                             display: true,
                             text: '平均权利金'
+                        },
+                        ticks: {
+                            maxTicksLimit: 6 // 限制刻度数量
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 0 // 防止标签旋转
                         }
                     }
                 },
                 plugins: {
+                    legend: {
+                        display: false // 隐藏图例提高性能
+                    },
                     tooltip: {
                         callbacks: {
                             label: function(context) {
