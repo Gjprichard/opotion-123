@@ -935,15 +935,70 @@
         // 为每个交易所收集相关数据
         const exchanges = [...new Set(data.map(item => item.exchange))];
         if (exchanges.length <= 1) {
-            // 如果只有一个交易所，显示提示信息
-            document.querySelectorAll('#pcr-comparison-chart, #volume-distribution-chart, #premium-spread-chart').forEach(canvas => {
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.font = '14px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillStyle = '#666';
-                ctx.fillText('至少需要两个交易所的数据来进行比较', canvas.width / 2, canvas.height / 2);
+            // 如果只有一个交易所，显示更友好的提示信息和引导
+            // 查找包含"Exchange Comparison"标题的卡片
+            const headerElements = document.querySelectorAll('.card-header h6');
+            let comparisonSection = null;
+            
+            for(let i = 0; i < headerElements.length; i++) {
+                if(headerElements[i].textContent.includes('Exchange Comparison')) {
+                    comparisonSection = headerElements[i].closest('.card');
+                    break;
+                }
+            }
+            
+            // 如果找不到比较卡片，不进行处理
+            if (!comparisonSection) {
+                console.warn('未找到Exchange Comparison卡片');
+                return;
+            }
+            
+            // 创建一个更友好的提示UI
+            const cardBody = comparisonSection.querySelector('.card-body');
+            if (!cardBody) {
+                console.warn('未找到Exchange Comparison卡片的内容区域');
+                return;
+            }
+            
+            // 使用与模板中相同的翻译函数格式来决定显示什么语言
+            // 通过检查页面上已有的元素判断当前语言
+            let isChineseUI = false;
+            const languageElements = document.querySelectorAll('.nav-item a');
+            languageElements.forEach(el => {
+                if(el.textContent.includes('中文')) {
+                    // 如果菜单中有"中文"选项，说明当前可能是英文界面
+                    isChineseUI = false;
+                } else if(el.textContent.includes('English')) {
+                    // 如果菜单中有"English"选项，说明当前可能是中文界面
+                    isChineseUI = true;
+                }
             });
+            
+            // 根据语言选择不同的消息
+            const title = isChineseUI ? '交易所比较功能需要多交易所数据' : 'Exchange Comparison Requires Multiple Exchange Data';
+            const description = isChineseUI ? 
+                `当前仅有一个交易所的数据（${exchanges[0] || 'deribit'}）。要启用交易所比较功能，请:` : 
+                `Currently only data from one exchange (${exchanges[0] || 'deribit'}) is available. To enable exchange comparison:`;
+            const step1 = isChineseUI ? '在设置页面配置多个交易所API（如Binance, OKX等）' : 'Configure multiple exchange APIs (like Binance, OKX, etc.) in the settings page';
+            const step2 = isChineseUI ? '确保这些交易所API已正确配置并可访问' : 'Ensure these exchange APIs are correctly configured and accessible';
+            const step3 = isChineseUI ? '等待系统收集多个交易所的数据' : 'Wait for the system to collect data from multiple exchanges';
+            const footer = isChineseUI ? '当有多个交易所的数据时，这里将显示交易所间的关键指标比较' : 'When data from multiple exchanges is available, key comparison metrics will be displayed here';
+            
+            cardBody.innerHTML = `
+                <div class="alert alert-info">
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="fas fa-info-circle fa-2x me-3"></i>
+                        <h5 class="m-0">${title}</h5>
+                    </div>
+                    <p>${description}</p>
+                    <ol>
+                        <li>${step1}</li>
+                        <li>${step2}</li>
+                        <li>${step3}</li>
+                    </ol>
+                    <p class="mb-0">${footer}</p>
+                </div>
+            `;
             return;
         }
 
