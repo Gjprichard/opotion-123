@@ -40,7 +40,7 @@ def dashboard():
 @app.route('/api/dashboard/data')
 def dashboard_data():
     symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
-    days = int(request.args.get('days', 7))
+    days = int(request.args.get('days', 30))
     
     # Get risk indicators for the past N days
     from_date = datetime.utcnow() - timedelta(days=days)
@@ -113,7 +113,7 @@ def update_threshold():
 def historical():
     symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
     option_type = request.args.get('type', 'call')
-    days = int(request.args.get('days', 7))
+    days = int(request.args.get('days', 30))
     
     # Get historical option data
     from_date = datetime.utcnow() - timedelta(days=days)

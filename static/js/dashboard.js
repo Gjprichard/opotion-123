@@ -95,7 +95,7 @@ function setupEventListeners() {
 }
 
 // Initialize charts with data from the API
-function initializeCharts(symbol, days = 7) {
+function initializeCharts(symbol, days = 30) {
     // Show loading indicators
     document.getElementById('risk-chart-container').innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     document.getElementById('reflexivity-chart-container').innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';

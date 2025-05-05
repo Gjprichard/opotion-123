@@ -47,8 +47,8 @@ class Config:
         }
     }
     
-    # Sample symbols to track (would be replaced with real data source)
-    TRACKED_SYMBOLS = ['BTC', 'ETH', 'SPY', 'QQQ', 'AAPL', 'MSFT', 'AMZN', 'TSLA']
+    # Only track cryptocurrency symbols
+    TRACKED_SYMBOLS = ['BTC', 'ETH']
     
     # Available languages for UI
     LANGUAGES = {
