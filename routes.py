@@ -1,4 +1,4 @@
-from flask import render_template, request, jsonify, redirect, url_for, flash
+from flask import render_template, request, jsonify, redirect, url_for, flash, session
 from datetime import datetime, timedelta
 from sqlalchemy import func
 
@@ -8,6 +8,7 @@ from config import Config
 from services.data_service import fetch_latest_option_data, fetch_historical_data
 from services.risk_calculator import calculate_risk_indicators, run_scenario_analysis
 from services.alert_service import get_active_alerts, acknowledge_alert, update_alert_threshold
+from translations import translations
 
 @app.route('/')
 def index():
@@ -269,3 +270,20 @@ def refresh_data():
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'message': 'Error fetching option data'}), 500
+
+@app.route('/language/<lang>')
+def set_language(lang):
+    """Set the language preference"""
+    if lang in Config.LANGUAGES:
+        session['language'] = lang
+        return redirect(request.referrer or url_for('dashboard'))
+    return redirect(url_for('dashboard'))
+
+@app.context_processor
+def inject_language():
+    """Inject language settings into all templates"""
+    lang = session.get('language', Config.DEFAULT_LANGUAGE)
+    return {
+        'current_language': lang,
+        'languages': Config.LANGUAGES
+    }

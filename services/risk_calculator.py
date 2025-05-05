@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 import pandas as pd
+import random
 from datetime import datetime, timedelta
 from sqlalchemy import func
 
@@ -60,7 +61,7 @@ def calculate_risk_indicators(symbol):
         reflexivity = calculate_reflexivity_indicator(df)
         market_sentiment = determine_market_sentiment(volaxivity, put_call_ratio, reflexivity)
         
-        # Create or update risk indicator record
+        # Create risk indicator record
         risk_indicator = RiskIndicator(
             symbol=symbol,
             timestamp=latest_time,
@@ -70,6 +71,14 @@ def calculate_risk_indicators(symbol):
             market_sentiment=market_sentiment,
             reflexivity_indicator=reflexivity
         )
+        
+        # Calculate crypto-specific risk indicators if applicable
+        if symbol in ['BTC', 'ETH']:
+            crypto_risk = get_crypto_specific_risk(symbol, df)
+            if crypto_risk:
+                risk_indicator.funding_rate = crypto_risk['funding_rate']
+                risk_indicator.liquidation_risk = crypto_risk['liquidation_risk']
+                logger.info(f"Added crypto-specific indicators for {symbol}: Funding Rate={crypto_risk['funding_rate']:.4f}, Liquidation Risk={crypto_risk['liquidation_risk']:.2f}")
         
         db.session.add(risk_indicator)
         db.session.commit()
@@ -218,6 +227,48 @@ def determine_market_sentiment(volaxivity, put_call_ratio, reflexivity):
         return 'risk-off'
     else:
         return 'risk-on'
+        
+def get_crypto_specific_risk(symbol, df):
+    """
+    Calculate crypto-specific risk indicators
+    """
+    if symbol not in ['BTC', 'ETH']:
+        return None
+        
+    try:
+        # Get the underlying price
+        underlying_price = df['underlying'].iloc[0]
+        
+        # Calculate funding rate imbalance (simulated)
+        # In real implementation, this would come from exchange API
+        funding_rate = random.uniform(-0.01, 0.01)
+        
+        # Calculate liquidation risk (higher when price is near large put or call clusters)
+        # Simulated based on open interest distribution
+        call_oi_distribution = df[df['option_type'] == 'call'].groupby('strike')['open_interest'].sum()
+        put_oi_distribution = df[df['option_type'] == 'put'].groupby('strike')['open_interest'].sum()
+        
+        # Find strikes with highest open interest
+        if not call_oi_distribution.empty and not put_oi_distribution.empty:
+            max_call_strike = call_oi_distribution.idxmax()
+            max_put_strike = put_oi_distribution.idxmax()
+            
+            # Calculate distance to these strikes
+            call_distance = abs(max_call_strike - underlying_price) / underlying_price
+            put_distance = abs(max_put_strike - underlying_price) / underlying_price
+            
+            # Liquidation risk increases as price approaches these levels
+            liquidation_risk = max(0, min(1, 0.2 / min(call_distance, put_distance)))
+        else:
+            liquidation_risk = 0.5  # Default if no data
+            
+        return {
+            'funding_rate': funding_rate,
+            'liquidation_risk': liquidation_risk
+        }
+    except Exception as e:
+        logger.error(f"Error calculating crypto-specific risk: {str(e)}")
+        return None
 
 def run_scenario_analysis(name, symbol, price_change, volatility_change, time_horizon, description=''):
     """

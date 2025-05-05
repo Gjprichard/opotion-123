@@ -33,6 +33,10 @@ class RiskIndicator(db.Model):
     market_sentiment = db.Column(db.String(20), nullable=True)  # 'risk-on' or 'risk-off'
     reflexivity_indicator = db.Column(db.Float, nullable=True)  # Measure of market feedback loop intensity
     
+    # Crypto-specific risk indicators
+    funding_rate = db.Column(db.Float, nullable=True)  # Funding rate for perpetual futures (crypto-specific)
+    liquidation_risk = db.Column(db.Float, nullable=True)  # Risk of cascading liquidations (crypto-specific) 
+    
     def __repr__(self):
         return f'<RiskIndicator {self.symbol} {self.timestamp}>'
 

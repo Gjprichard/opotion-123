@@ -48,4 +48,13 @@ class Config:
     }
     
     # Sample symbols to track (would be replaced with real data source)
-    TRACKED_SYMBOLS = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'AMZN', 'TSLA']
+    TRACKED_SYMBOLS = ['BTC', 'ETH', 'SPY', 'QQQ', 'AAPL', 'MSFT', 'AMZN', 'TSLA']
+    
+    # Available languages for UI
+    LANGUAGES = {
+        'en': 'English',
+        'zh': '中文'
+    }
+    
+    # Default language
+    DEFAULT_LANGUAGE = 'en'
