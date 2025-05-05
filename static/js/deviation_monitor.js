@@ -240,7 +240,8 @@ async function fetchDeviationData(showToastOnSuccess = false) {
         time_period: timePeriod,
         days: days,
         anomaly_only: anomalyOnly,
-        volume_change_filter: volumeChangeFilter
+        volume_change_filter: volumeChangeFilter,
+        include_stats: true  // 请求包含统计数据
     });
     
     // 仅当选择了特定期权类型时添加参数
@@ -252,20 +253,40 @@ async function fetchDeviationData(showToastOnSuccess = false) {
     
     try {
         const response = await fetch(`/api/deviation/data?${params.toString()}`);
-        const data = await response.json();
+        const responseData = await response.json();
         
         if (response.ok) {
-            console.log(`Received ${data.length} records from API`);
+            // 检查响应数据格式
+            let deviations = [];
+            let statistics = {};
+            
+            // 处理新的响应格式(包含统计数据的对象)或旧格式(纯数组)
+            if (responseData && typeof responseData === 'object' && responseData.deviations) {
+                // 新格式
+                deviations = responseData.deviations;
+                statistics = responseData.statistics || {};
+                console.log(`Received ${deviations.length} records and statistics from API`);
+            } else if (Array.isArray(responseData)) {
+                // 旧格式(为了兼容)
+                deviations = responseData;
+                console.log(`Received ${deviations.length} records from API (legacy format)`);
+                // 在前端计算统计数据
+                statistics = calculateDataStatistics(deviations);
+            } else {
+                console.error('Unexpected response format:', responseData);
+                showToast('Unexpected data format received', 'warning');
+                return;
+            }
             
             // 如果设置了成交量变化筛选器，确保在前端再次进行筛选
-            let filteredData = data;
+            let filteredData = deviations;
             if (volumeChangeFilter > 0) {
                 // 仅保留成交量变化百分比不为空且大于等于指定值的数据
-                filteredData = data.filter(item => 
+                filteredData = deviations.filter(item => 
                     item.volume_change_percent !== null && 
                     item.volume_change_percent >= volumeChangeFilter
                 );
-                console.log(`Applied volume change filter: ${volumeChangeFilter}%, found ${filteredData.length} matching records out of ${data.length}`);
+                console.log(`Applied volume change filter: ${volumeChangeFilter}%, found ${filteredData.length} matching records out of ${deviations.length}`);
             }
             
             // 限制处理的数据量以提高性能
@@ -274,7 +295,20 @@ async function fetchDeviationData(showToastOnSuccess = false) {
             
             // 使用 requestAnimationFrame 来优化渲染性能
             requestAnimationFrame(() => {
-                createDeviationChart(limitedData);
+                // 如果统计数据可用，直接使用后端提供的统计数据
+                if (Object.keys(statistics).length > 0) {
+                    // 更新统计面板
+                    updateStatisticsPanel(statistics);
+                    
+                    // 创建偏离图表
+                    createDeviationChart(limitedData, statistics);
+                    
+                    // 创建趋势分析图
+                    createTrendAnalysisChart(limitedData, statistics);
+                } else {
+                    // 否则使用前端计算的统计数据
+                    createDeviationChart(limitedData);
+                }
                 
                 // 延迟渲染其他图表和表格
                 setTimeout(() => {
@@ -291,8 +325,8 @@ async function fetchDeviationData(showToastOnSuccess = false) {
                 }, 100);
             });
         } else {
-            console.error('Error fetching deviation data:', data.message);
-            showToast(`Error loading data: ${data.message}`, 'danger');
+            console.error('Error fetching deviation data:', responseData.message);
+            showToast(`Error loading data: ${responseData.message}`, 'danger');
         }
     } catch (error) {
         console.error('Fetch error:', error);
@@ -300,48 +334,13 @@ async function fetchDeviationData(showToastOnSuccess = false) {
     }
 }
 
-// 创建偏离图表
-function createDeviationChart(data) {
-    // 优化: 如果数据量太大，采样以提高性能
-    let chartData = data;
-    if (data.length > 100) {
-        // 采样: 只取每n个数据点中的1个
-        const sampleInterval = Math.ceil(data.length / 100);
-        chartData = data.filter((_, index) => index % sampleInterval === 0);
-        console.log(`Sampled data for chart: ${chartData.length} points from ${data.length} original points`);
-    }
+// 创建偏离图表 - 优化版
+function createDeviationChart(data, externalStats = null) {
+    // 使用外部统计数据或计算新的统计数据
+    const stats = externalStats || calculateDataStatistics(data);
     
-    // 准备图表数据
-    const labels = chartData.map(item => item.timestamp);
-    const deviationDataset = {
-        label: 'Deviation %',
-        data: chartData.map(item => item.deviation_percent),
-        borderColor: 'rgba(75, 192, 192, 1)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        borderWidth: 2,
-        fill: false,
-        yAxisID: 'y-deviation'
-    };
-    
-    const volumeDataset = {
-        label: 'Volume',
-        data: chartData.map(item => item.volume),
-        borderColor: 'rgba(153, 102, 255, 1)',
-        backgroundColor: 'rgba(153, 102, 255, 0.2)',
-        borderWidth: 1,
-        fill: false,
-        yAxisID: 'y-volume'
-    };
-    
-    const premiumDataset = {
-        label: 'Premium',
-        data: chartData.map(item => item.premium),
-        borderColor: 'rgba(255, 159, 64, 1)',
-        backgroundColor: 'rgba(255, 159, 64, 0.2)',
-        borderWidth: 1,
-        fill: false,
-        yAxisID: 'y-premium'
-    };
+    // 创建散点图数据
+    const scatterData = prepareScatterData(data);
     
     // 销毁现有图表
     const ctx = document.getElementById('deviation-chart');
@@ -349,79 +348,637 @@ function createDeviationChart(data) {
         deviationChart.destroy();
     }
     
-    // 创建新图表
+    // 创建增强型散点图
     deviationChart = new Chart(ctx, {
-        type: 'line',
+        type: 'scatter',
         data: {
-            labels: labels,
-            datasets: [deviationDataset, volumeDataset, premiumDataset]
+            datasets: scatterData
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `期权执行价偏离分布图 (${stats.totalPoints || data.length}个数据点)`
+                },
+                subtitle: {
+                    display: true,
+                    text: `平均偏离率: ${(stats.avgDeviation || 0).toFixed(2)}%, 平均成交量变化: ${(stats.avgVolumeChange || 0).toFixed(2)}%`
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const point = context.raw;
+                            if (point.isTrendLine) {
+                                return `趋势线: ${point.trendLabel || ''}`;
+                            }
+                            return `${point.symbol} ${point.optionTypeDisplay}: 执行价 ${point.strike_price.toFixed(2)}, 偏离 ${point.deviation_percent.toFixed(2)}%, 成交量变化 ${point.volume_change_percent ? point.volume_change_percent.toFixed(1) : 'N/A'}%`;
+                        },
+                        footer: function(tooltipItems) {
+                            const item = tooltipItems[0];
+                            if (item.raw.isTrendLine) return '';
+                            
+                            // 为异常点添加额外信息
+                            if (item.raw.is_anomaly) {
+                                let level = '';
+                                switch(item.raw.anomaly_level) {
+                                    case 'attention': level = '关注级'; break;
+                                    case 'warning': level = '警告级'; break;
+                                    case 'severe': level = '严重级'; break;
+                                }
+                                return `异常级别: ${level}`;
+                            }
+                            return '';
+                        }
+                    }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
             },
             scales: {
                 x: {
-                    ticks: {
-                        maxRotation: 0,
-                        autoSkip: true,
-                        maxTicksLimit: 10
-                    }
-                },
-                'y-deviation': {
                     type: 'linear',
-                    display: true,
-                    position: 'left',
+                    position: 'bottom',
                     title: {
                         display: true,
-                        text: 'Deviation %'
+                        text: '偏离百分比 (%)'
+                    },
+                    min: 0,
+                    max: 10,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: '成交量变化率 (%)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            },
+            animation: {
+                duration: 1000
+            }
+        }
+    });
+    
+    // 如果统计面板不是由外部更新的，则在这里更新
+    if (!externalStats) {
+        updateStatisticsPanel(stats);
+        createTrendAnalysisChart(data, stats);
+    }
+}
+
+// 准备散点图数据
+function prepareScatterData(data) {
+    // 按期权类型和异常级别分组
+    const callData = [];
+    const putData = [];
+    const callAnomalyData = [];
+    const putAnomalyData = [];
+    
+    // 遍历数据
+    data.forEach(item => {
+        // 基本点数据
+        const point = {
+            x: item.deviation_percent,
+            y: item.volume_change_percent || 0,
+            symbol: item.symbol,
+            strike_price: item.strike_price,
+            optionTypeDisplay: item.option_type === 'call' ? '看涨' : '看跌',
+            option_type: item.option_type,
+            deviation_percent: item.deviation_percent,
+            volume_change_percent: item.volume_change_percent,
+            is_anomaly: item.is_anomaly,
+            anomaly_level: item.anomaly_level,
+            premium: item.premium,
+            premium_change_percent: item.premium_change_percent
+        };
+        
+        // 根据期权类型和异常状态分组
+        if (item.option_type === 'call') {
+            if (item.is_anomaly) {
+                callAnomalyData.push(point);
+            } else {
+                callData.push(point);
+            }
+        } else {
+            if (item.is_anomaly) {
+                putAnomalyData.push(point);
+            } else {
+                putData.push(point);
+            }
+        }
+    });
+    
+    // 计算趋势线
+    const callTrendLine = calculateTrendLine(callData.concat(callAnomalyData));
+    const putTrendLine = calculateTrendLine(putData.concat(putAnomalyData));
+    
+    // 创建数据集
+    return [
+        {
+            label: '看涨期权',
+            data: callData,
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgb(54, 162, 235)',
+            pointRadius: 4,
+            pointHoverRadius: 6
+        },
+        {
+            label: '看跌期权',
+            data: putData,
+            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+            borderColor: 'rgb(75, 192, 192)', 
+            pointRadius: 4,
+            pointHoverRadius: 6
+        },
+        {
+            label: '看涨期权 (异常)',
+            data: callAnomalyData,
+            backgroundColor: function(context) {
+                const level = context.raw.anomaly_level;
+                switch(level) {
+                    case 'attention': return 'rgba(255, 205, 86, 0.7)';
+                    case 'warning': return 'rgba(255, 159, 64, 0.7)';
+                    case 'severe': return 'rgba(255, 99, 132, 0.7)';
+                    default: return 'rgba(255, 99, 132, 0.7)';
+                }
+            },
+            borderColor: function(context) {
+                const level = context.raw.anomaly_level;
+                switch(level) {
+                    case 'attention': return 'rgb(255, 205, 86)';
+                    case 'warning': return 'rgb(255, 159, 64)';
+                    case 'severe': return 'rgb(255, 99, 132)';
+                    default: return 'rgb(255, 99, 132)';
+                }
+            },
+            pointRadius: 6,
+            pointHoverRadius: 8
+        },
+        {
+            label: '看跌期权 (异常)',
+            data: putAnomalyData,
+            backgroundColor: function(context) {
+                const level = context.raw.anomaly_level;
+                switch(level) {
+                    case 'attention': return 'rgba(255, 205, 86, 0.7)';
+                    case 'warning': return 'rgba(255, 159, 64, 0.7)';
+                    case 'severe': return 'rgba(255, 99, 132, 0.7)';
+                    default: return 'rgba(255, 99, 132, 0.7)';
+                }
+            },
+            borderColor: function(context) {
+                const level = context.raw.anomaly_level;
+                switch(level) {
+                    case 'attention': return 'rgb(255, 205, 86)';
+                    case 'warning': return 'rgb(255, 159, 64)';
+                    case 'severe': return 'rgb(255, 99, 132)';
+                    default: return 'rgb(255, 99, 132)';
+                }
+            },
+            pointRadius: 6,
+            pointHoverRadius: 8
+        },
+        {
+            label: '看涨期权趋势',
+            data: callTrendLine,
+            type: 'line',
+            borderColor: 'rgba(54, 162, 235, 0.8)',
+            borderWidth: 2,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false
+        },
+        {
+            label: '看跌期权趋势',
+            data: putTrendLine,
+            type: 'line',
+            borderColor: 'rgba(75, 192, 192, 0.8)',
+            borderWidth: 2,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false
+        }
+    ];
+}
+
+// 计算数据统计值
+function calculateDataStatistics(data) {
+    // 基本统计
+    const totalPoints = data.length;
+    let totalDeviation = 0;
+    let totalVolumeChange = 0;
+    let validVolumePoints = 0;
+    
+    // 异常统计
+    let anomalyPoints = 0;
+    let attentionCount = 0;
+    let warningCount = 0;
+    let severeCount = 0;
+    
+    // 期权类型统计
+    let callOptions = 0;
+    let putOptions = 0;
+    let callVolume = 0;
+    let putVolume = 0;
+    
+    // 偏离区间统计
+    let deviationRanges = {
+        '0-2%': 0,
+        '2-4%': 0,
+        '4-6%': 0,
+        '6-8%': 0,
+        '8-10%': 0
+    };
+    
+    // 分析数据
+    data.forEach(item => {
+        // 基本统计
+        totalDeviation += item.deviation_percent;
+        
+        if (item.volume_change_percent !== null) {
+            totalVolumeChange += item.volume_change_percent;
+            validVolumePoints++;
+        }
+        
+        // 期权类型统计
+        if (item.option_type === 'call') {
+            callOptions++;
+            callVolume += item.volume || 0;
+        } else {
+            putOptions++;
+            putVolume += item.volume || 0;
+        }
+        
+        // 异常统计
+        if (item.is_anomaly) {
+            anomalyPoints++;
+            
+            switch(item.anomaly_level) {
+                case 'attention': attentionCount++; break;
+                case 'warning': warningCount++; break;
+                case 'severe': severeCount++; break;
+            }
+        }
+        
+        // 偏离区间统计
+        const dev = item.deviation_percent;
+        if (dev < 2) {
+            deviationRanges['0-2%']++;
+        } else if (dev < 4) {
+            deviationRanges['2-4%']++;
+        } else if (dev < 6) {
+            deviationRanges['4-6%']++;
+        } else if (dev < 8) {
+            deviationRanges['6-8%']++;
+        } else {
+            deviationRanges['8-10%']++;
+        }
+    });
+    
+    // 计算平均值
+    const avgDeviation = totalPoints > 0 ? totalDeviation / totalPoints : 0;
+    const avgVolumeChange = validVolumePoints > 0 ? totalVolumeChange / validVolumePoints : 0;
+    const putCallRatio = callOptions > 0 ? putOptions / callOptions : 0;
+    const volumePutCallRatio = callVolume > 0 ? putVolume / callVolume : 0;
+    const anomalyPercentage = totalPoints > 0 ? (anomalyPoints / totalPoints) * 100 : 0;
+    
+    // 返回统计结果
+    return {
+        totalPoints,
+        avgDeviation,
+        avgVolumeChange,
+        anomalyPoints,
+        anomalyPercentage,
+        putCallRatio,
+        volumePutCallRatio,
+        callOptions,
+        putOptions,
+        callVolume,
+        putVolume,
+        attentionCount,
+        warningCount,
+        severeCount,
+        deviationRanges
+    };
+}
+
+// 计算趋势线数据
+function calculateTrendLine(points) {
+    if (points.length < 5) return [];  // 数据点太少，不计算趋势
+    
+    // 提取有效数据点
+    const validPoints = points.filter(p => 
+        p.x !== null && p.y !== null && !isNaN(p.x) && !isNaN(p.y)
+    );
+    
+    if (validPoints.length < 5) return [];
+    
+    // 计算平均值
+    let sumX = 0, sumY = 0;
+    validPoints.forEach(point => {
+        sumX += point.x;
+        sumY += point.y;
+    });
+    
+    const avgX = sumX / validPoints.length;
+    const avgY = sumY / validPoints.length;
+    
+    // 计算斜率和截距
+    let numerator = 0, denominator = 0;
+    validPoints.forEach(point => {
+        numerator += (point.x - avgX) * (point.y - avgY);
+        denominator += Math.pow(point.x - avgX, 2);
+    });
+    
+    // 避免除以零
+    if (Math.abs(denominator) < 0.001) return [];
+    
+    const slope = numerator / denominator;
+    const intercept = avgY - slope * avgX;
+    
+    // 生成趋势线数据点
+    const trendPoints = [];
+    
+    // 在x轴上生成数据点
+    for (let x = 0; x <= 10; x += 0.5) {
+        trendPoints.push({
+            x: x,
+            y: slope * x + intercept,
+            isTrendLine: true,
+            trendLabel: `斜率: ${slope.toFixed(2)}`
+        });
+    }
+    
+    return trendPoints;
+}
+
+// 更新统计面板
+function updateStatisticsPanel(stats) {
+    // 获取统计面板元素
+    const statsPanelElement = document.getElementById('stats-panel');
+    if (!statsPanelElement) return;
+    
+    // 创建统计内容
+    let statsHtml = `
+        <div class="card mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">数据统计</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="font-weight-bold">基本统计</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>总数据点</th>
+                                <td>${stats.totalPoints}</td>
+                            </tr>
+                            <tr>
+                                <th>平均偏离率</th>
+                                <td>${stats.avgDeviation.toFixed(2)}%</td>
+                            </tr>
+                            <tr>
+                                <th>平均成交量变化</th>
+                                <td>${stats.avgVolumeChange.toFixed(2)}%</td>
+                            </tr>
+                            <tr>
+                                <th>看跌/看涨比例(数量)</th>
+                                <td>${stats.putCallRatio.toFixed(2)} (${stats.putOptions}/${stats.callOptions})</td>
+                            </tr>
+                            <tr>
+                                <th>看跌/看涨比例(成交量)</th>
+                                <td>${stats.volumePutCallRatio.toFixed(2)} (${stats.putVolume}/${stats.callVolume})</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="font-weight-bold">异常统计</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>异常数据点</th>
+                                <td>${stats.anomalyPoints} (${stats.anomalyPercentage.toFixed(1)}%)</td>
+                            </tr>
+                            <tr>
+                                <th>关注级别</th>
+                                <td>${stats.attentionCount}</td>
+                            </tr>
+                            <tr>
+                                <th>警告级别</th>
+                                <td>${stats.warningCount}</td>
+                            </tr>
+                            <tr>
+                                <th>严重级别</th>
+                                <td>${stats.severeCount}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6 class="font-weight-bold">偏离分布</h6>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['0-2%'], stats.totalPoints)}%" 
+                                title="0-2%: ${stats.deviationRanges['0-2%']}个数据点">0-2%</div>
+                            <div class="progress-bar bg-info" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['2-4%'], stats.totalPoints)}%" 
+                                title="2-4%: ${stats.deviationRanges['2-4%']}个数据点">2-4%</div>
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['4-6%'], stats.totalPoints)}%" 
+                                title="4-6%: ${stats.deviationRanges['4-6%']}个数据点">4-6%</div>
+                            <div class="progress-bar bg-warning" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['6-8%'], stats.totalPoints)}%" 
+                                title="6-8%: ${stats.deviationRanges['6-8%']}个数据点">6-8%</div>
+                            <div class="progress-bar bg-danger" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['8-10%'], stats.totalPoints)}%" 
+                                title="8-10%: ${stats.deviationRanges['8-10%']}个数据点">8-10%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 更新面板内容
+    statsPanelElement.innerHTML = statsHtml;
+}
+
+// 辅助函数 - 计算百分比
+function calculatePercentage(value, total) {
+    if (total === 0) return 0;
+    return (value / total * 100).toFixed(1);
+}
+
+// 创建趋势分析图
+function createTrendAnalysisChart(data, stats) {
+    // 获取趋势分析图元素
+    const trendChartElement = document.getElementById('trend-analysis-chart');
+    if (!trendChartElement || !data.length) return;
+    
+    // 根据时间重新组织数据
+    const timeSeriesData = organizeTimeSeriesData(data);
+    
+    // 销毁现有图表
+    if (window.trendAnalysisChart) {
+        window.trendAnalysisChart.destroy();
+    }
+    
+    // 创建数据集
+    const datasets = [
+        {
+            label: '成交量',
+            data: timeSeriesData.map(d => d.totalVolume),
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            yAxisID: 'y-volume',
+            fill: true
+        },
+        {
+            label: '异常数量',
+            data: timeSeriesData.map(d => d.anomalyCount),
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            yAxisID: 'y-anomaly',
+            fill: true
+        },
+        {
+            label: '看跌/看涨比率',
+            data: timeSeriesData.map(d => d.putCallRatio),
+            borderColor: 'rgba(54, 162, 235, 1)',
+            backgroundColor: 'transparent',
+            yAxisID: 'y-ratio',
+            type: 'line'
+        }
+    ];
+    
+    // 创建图表
+    window.trendAnalysisChart = new Chart(trendChartElement, {
+        type: 'bar',
+        data: {
+            labels: timeSeriesData.map(d => d.timeLabel),
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '期权成交量和异常趋势分析'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: '时间'
                     }
                 },
                 'y-volume': {
                     type: 'linear',
                     display: true,
-                    position: 'right',
+                    position: 'left',
                     title: {
                         display: true,
-                        text: 'Volume'
-                    },
-                    grid: {
-                        drawOnChartArea: false
+                        text: '成交量'
                     }
                 },
-                'y-premium': {
+                'y-anomaly': {
                     type: 'linear',
                     display: true,
                     position: 'right',
                     title: {
                         display: true,
-                        text: 'Premium'
+                        text: '异常数量'
                     },
                     grid: {
                         drawOnChartArea: false
                     }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const label = context.dataset.label || '';
-                            const value = context.raw !== null ? context.raw : 'N/A';
-                            if (label === 'Deviation %') {
-                                return `${label}: ${value.toFixed(2)}%`;
-                            } else {
-                                return `${label}: ${value}`;
-                            }
-                        }
+                },
+                'y-ratio': {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: '看跌/看涨比率'
+                    },
+                    min: 0,
+                    max: 3,
+                    grid: {
+                        drawOnChartArea: false
                     }
                 }
             }
         }
     });
+}
+
+// 按时间组织数据
+function organizeTimeSeriesData(data) {
+    // 按小时分组数据
+    const hourlyData = {};
+    
+    data.forEach(item => {
+        const date = new Date(item.timestamp);
+        const hourKey = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:00`;
+        
+        if (!hourlyData[hourKey]) {
+            hourlyData[hourKey] = {
+                timeLabel: hourKey,
+                totalVolume: 0,
+                callVolume: 0,
+                putVolume: 0,
+                anomalyCount: 0,
+                dataPoints: 0
+            };
+        }
+        
+        // 累加数据
+        hourlyData[hourKey].dataPoints++;
+        hourlyData[hourKey].totalVolume += item.volume || 0;
+        
+        if (item.option_type === 'call') {
+            hourlyData[hourKey].callVolume += item.volume || 0;
+        } else {
+            hourlyData[hourKey].putVolume += item.volume || 0;
+        }
+        
+        if (item.is_anomaly) {
+            hourlyData[hourKey].anomalyCount++;
+        }
+    });
+    
+    // 计算比率并转换为数组
+    const timeSeriesArray = Object.values(hourlyData).map(hour => {
+        return {
+            ...hour,
+            putCallRatio: hour.callVolume > 0 ? hour.putVolume / hour.callVolume : 0
+        };
+    });
+    
+    // 按时间排序
+    timeSeriesArray.sort((a, b) => new Date(a.timeLabel) - new Date(b.timeLabel));
+    
+    // 限制数据点数量以提高性能
+    const maxPoints = 24; // 显示最近24小时
+    if (timeSeriesArray.length > maxPoints) {
+        return timeSeriesArray.slice(timeSeriesArray.length - maxPoints);
+    }
+    
+    return timeSeriesArray;
 }
 
 // 更新偏离数据表格

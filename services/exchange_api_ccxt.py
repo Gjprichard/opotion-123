@@ -89,7 +89,9 @@ def get_underlying_price(symbol):
         return None
 
 def get_option_market_data(symbol):
-    """获取期权市场数据"""
+    """获取期权市场数据 - 优化版
+       仅获取BTC和ETH的期权数据，且只获取执行价偏离市场价 ±10% 的期权合约
+    """
     global exchange
     
     try:
@@ -97,122 +99,119 @@ def get_option_market_data(symbol):
             logger.debug("交易所实例未初始化，正在初始化...")
             initialize_exchange()
         
-        # 确保符号格式正确
+        # 验证符号 - 仅处理BTC和ETH
         symbol = symbol.upper()
-        
+        if symbol not in ["BTC", "ETH"]:
+            logger.warning(f"不支持的符号: {symbol}，仅支持BTC和ETH")
+            return []
+            
         # 获取当前价格
         current_price = get_underlying_price(symbol)
         if not current_price:
             logger.error(f"未能获取 {symbol} 的当前价格")
             return []
-        
-        # 获取所有期权合约
-        markets = exchange.markets
-        
-        # 筛选出特定标的资产的期权合约
-        option_markets = [
-            market for market in markets.values() 
-            if market['base'] == symbol and market['option'] and market['active']
-        ]
-        
-        if not option_markets:
-            logger.error(f"未找到 {symbol} 的期权合约")
-            return []
             
-        logger.info(f"找到 {len(option_markets)} 个 {symbol} 期权合约")
-        
-        # 过滤期权 - 仅保留行权价在当前价格±10%范围内的合约
+        # 计算价格范围 - 仅保留±10%范围内的期权
         strike_min = current_price * 0.9
         strike_max = current_price * 1.1
         
+        logger.info(f"[优化] 获取 {symbol} 执行价范围 {strike_min:.2f} - {strike_max:.2f} 的期权数据")
+        
+        # 获取所有期权合约 - 优化：先筛选再处理
+        markets = exchange.markets
+        
+        # 筛选特定条件的期权合约 - 一次性完成多条件筛选
         filtered_options = [
-            opt for opt in option_markets 
-            if opt['strike'] and strike_min <= opt['strike'] <= strike_max
+            market for market in markets.values() 
+            if (market['base'] == symbol and 
+                market['option'] and 
+                market['active'] and
+                market['strike'] and 
+                strike_min <= market['strike'] <= strike_max)
         ]
         
-        logger.info(f"过滤后剩余 {len(filtered_options)} 个期权合约，行权价范围 {strike_min:.2f} - {strike_max:.2f}")
+        if not filtered_options:
+            logger.warning(f"未找到符合条件的 {symbol} 期权合约")
+            return []
+            
+        logger.info(f"找到 {len(filtered_options)} 个符合条件的 {symbol} 期权合约")
         
         # 按到期日排序
         filtered_options.sort(key=lambda x: x['expiry'])
         
-        # 获取每个期权的详细数据
+        # 获取期权详细数据 - 优化：批量处理相似到期日的期权
         option_data = []
-        for option in filtered_options:
-            try:
-                # 获取期权行情
-                ticker = exchange.fetch_ticker(option['symbol'])
-                if not ticker:
-                    continue
-                
-                # 获取期权信息
-                expiry_date = datetime.fromtimestamp(option['expiry'] / 1000).date()
-                option_type = option['optionType']  # 'call' 或 'put'
-                strike_price = option['strike']
-                
-                # 计算中间价
-                option_price = None
-                if ticker.get('bid') and ticker.get('ask'):
-                    option_price = (ticker['bid'] + ticker['ask']) / 2
-                elif ticker.get('markPrice'):
-                    option_price = ticker['markPrice']
-                else:
-                    continue  # 跳过没有价格的期权
-                
-                # 成交量和持仓量
-                volume = ticker.get('baseVolume', 0)
-                open_interest = ticker.get('info', {}).get('open_interest', 0)
-                
-                # 尝试获取Greeks - 先检查info字段
-                greeks = ticker.get('info', {}).get('greeks', {})
-                
-                implied_volatility = None
-                delta = None
-                gamma = None
-                theta = None
-                vega = None
-                
-                # 从info中提取Greeks
-                if greeks:
-                    implied_volatility = ticker.get('info', {}).get('mark_iv', 0) / 100  # 转换为小数
-                    delta = greeks.get('delta')
-                    gamma = greeks.get('gamma')
-                    theta = greeks.get('theta')
-                    vega = greeks.get('vega')
-                
-                # 如果无法从info获取，尝试fetch_greeks (需要API密钥)
-                if hasattr(exchange, 'fetch_greeks') and not all([implied_volatility, delta, gamma, theta, vega]):
+        batch_size = 10  # 每批处理的期权数量
+        
+        # 按到期日分组，减少API调用次数
+        from itertools import groupby
+        grouped_options = []
+        for _, group in groupby(filtered_options, key=lambda x: x['expiry']):
+            grouped_options.append(list(group))
+        
+        # 处理每组期权
+        for group in grouped_options:
+            # 每组最多处理batch_size个合约以减轻API负担
+            for i in range(0, min(len(group), 20), batch_size):
+                batch = group[i:i+batch_size]
+                for option in batch:
                     try:
-                        full_greeks = exchange.fetch_greeks(option['symbol'])
-                        if full_greeks:
-                            implied_volatility = full_greeks.get('impliedVolatility')
-                            delta = full_greeks.get('delta')
-                            gamma = full_greeks.get('gamma')
-                            theta = full_greeks.get('theta')
-                            vega = full_greeks.get('vega')
+                        # 获取期权行情
+                        ticker = exchange.fetch_ticker(option['symbol'])
+                        if not ticker:
+                            continue
+                        
+                        # 基本信息处理
+                        expiry_date = datetime.fromtimestamp(option['expiry'] / 1000).date()
+                        option_type = option['optionType']  # 'call' 或 'put'
+                        strike_price = option['strike']
+                        
+                        # 计算价格
+                        option_price = None
+                        if ticker.get('bid') and ticker.get('ask'):
+                            option_price = (ticker['bid'] + ticker['ask']) / 2
+                        elif ticker.get('markPrice'):
+                            option_price = ticker['markPrice']
+                        else:
+                            continue  # 跳过没有价格的期权
+                        
+                        # 只关注有成交量的期权
+                        volume = ticker.get('baseVolume', 0)
+                        if volume <= 0:
+                            continue  # 跳过无成交量的期权
+                            
+                        open_interest = ticker.get('info', {}).get('open_interest', 0)
+                        
+                        # Greeks处理 - 优化：只提取必要的数据
+                        greeks = ticker.get('info', {}).get('greeks', {})
+                        
+                        implied_volatility = ticker.get('info', {}).get('mark_iv', 0) / 100  # 转换为小数
+                        delta = greeks.get('delta')
+                        gamma = greeks.get('gamma')
+                        theta = greeks.get('theta')
+                        vega = greeks.get('vega')
+                        
+                        # 添加到结果集
+                        option_data.append({
+                            "symbol": symbol,
+                            "expiration_date": expiry_date,
+                            "strike_price": strike_price,
+                            "option_type": option_type,
+                            "underlying_price": current_price,
+                            "option_price": option_price,
+                            "volume": volume,
+                            "open_interest": open_interest,
+                            "implied_volatility": implied_volatility,
+                            "delta": delta,
+                            "gamma": gamma,
+                            "theta": theta,
+                            "vega": vega,
+                            "timestamp": datetime.utcnow()
+                        })
+                        
                     except Exception as e:
-                        logger.debug(f"获取Greeks失败: {str(e)}")
-                
-                # 添加到结果集
-                option_data.append({
-                    "symbol": symbol,
-                    "expiration_date": expiry_date,
-                    "strike_price": strike_price,
-                    "option_type": option_type,
-                    "underlying_price": current_price,
-                    "option_price": option_price,
-                    "volume": volume,
-                    "open_interest": open_interest,
-                    "implied_volatility": implied_volatility,
-                    "delta": delta,
-                    "gamma": gamma,
-                    "theta": theta,
-                    "vega": vega,
-                    "timestamp": datetime.utcnow()
-                })
-                
-            except Exception as e:
-                logger.error(f"处理期权 {option['symbol']} 时出错: {str(e)}")
-                continue
+                        logger.warning(f"处理期权 {option['symbol']} 时出错: {str(e)}")
+                        continue
         
         logger.info(f"成功获取 {len(option_data)} 个 {symbol} 期权合约的详细数据")
         return option_data

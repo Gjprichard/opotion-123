@@ -290,13 +290,47 @@
 
 <!-- Charts Row -->
 <div class="row mb-4">
-    <div class="col-lg-12">
+    <div class="col-lg-8">
         <div class="card shadow">
-            <div class="card-header py-3">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
                 <h6 class="m-0 font-weight-bold text-primary">{{ t('deviation_volume_premium_chart') }}</h6>
+                <div class="dropdown no-arrow">
+                    <a href="#" id="export-scatter-data" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-download fa-sm"></i> {{ t('export_chart_data') }}
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 <canvas id="deviation-chart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 统计面板区域 -->
+    <div class="col-lg-4">
+        <div id="stats-panel">
+            <!-- 统计信息将由JavaScript动态填充 -->
+        </div>
+    </div>
+</div>
+
+<!-- 趋势分析图表 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">{{ t('trend_analysis') }}</h6>
+                <div class="text-muted small">
+                    <i class="fas fa-info-circle"></i> {{ t('showing_trends_over_time') }}
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="trend-analysis-chart" height="250"></canvas>
+                <div class="text-center mt-3 small">
+                    <p class="text-muted">
+                        {{ t('trend_analysis_helps_predict_market_movements') }}
+                    </p>
+                </div>
             </div>
         </div>
     </div>

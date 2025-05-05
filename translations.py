@@ -313,5 +313,50 @@ translations = {
     'option_type': {
         'en': 'Option Type',
         'zh': '期权类型'
+    },
+    # 统计和趋势分析相关
+    'trend_analysis': {
+        'en': 'Trend Analysis',
+        'zh': '趋势分析'
+    },
+    'showing_trends_over_time': {
+        'en': 'Showing trends over time',
+        'zh': '显示随时间变化的趋势'
+    },
+    'trend_analysis_helps_predict_market_movements': {
+        'en': 'This analysis helps identify patterns that may predict future market movements',
+        'zh': '此分析有助于识别可能预测未来市场走势的模式'
+    },
+    'export_chart_data': {
+        'en': 'Export Chart Data',
+        'zh': '导出图表数据'
+    },
+    'volume_change_min': {
+        'en': 'Min Volume Change',
+        'zh': '最小成交量变化'
+    },
+    'all': {
+        'en': 'All',
+        'zh': '全部'
+    },
+    'anomaly_alerts': {
+        'en': 'Anomaly Alerts',
+        'zh': '异常警报'
+    },
+    'no_alerts': {
+        'en': 'No alerts',
+        'zh': '无警报'
+    },
+    'alert_type': {
+        'en': 'Alert Type',
+        'zh': '警报类型'
+    },
+    'trigger_condition': {
+        'en': 'Trigger Condition',
+        'zh': '触发条件'
+    },
+    'acknowledged': {
+        'en': 'Acknowledged',
+        'zh': '已确认'
     }
 }

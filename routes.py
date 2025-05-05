@@ -370,8 +370,8 @@ def deviation_monitor():
     if time_period not in Config.TIME_PERIODS:
         time_period = '4h'
     
-    # 获取偏离数据
-    deviations = get_deviation_data(
+    # 获取偏离数据 - 现在返回包含统计信息的字典
+    deviation_data = get_deviation_data(
         symbol=symbol,
         time_period=time_period,
         is_anomaly=True if anomaly_only else None,
@@ -380,6 +380,10 @@ def deviation_monitor():
         option_type=option_type if option_type else None,
         volume_change_filter=volume_change_filter if volume_change_filter > 0 else None
     )
+    
+    # 分离偏离数据和统计信息
+    deviations = deviation_data.get('deviations', [])
+    statistics = deviation_data.get('statistics', {})
     
     # 获取未确认的偏离警报
     active_alerts = get_deviation_alerts(
@@ -396,6 +400,7 @@ def deviation_monitor():
     
     return render_template('deviation_monitor.html',
                           deviations=deviations,
+                          statistics=statistics,
                           active_alerts=active_alerts,
                           symbol=symbol,
                           days=days,
@@ -403,6 +408,9 @@ def deviation_monitor():
                           symbols=Config.TRACKED_SYMBOLS,
                           time_periods=Config.TIME_PERIODS,
                           current_time_period=time_period,
+                          exchange=exchange,
+                          option_type=option_type,
+                          volume_change_filter=volume_change_filter,
                           expiration_dates=[exp[0] for exp in expiration_dates])
 
 @app.route('/api/deviation/data')
@@ -416,16 +424,17 @@ def deviation_data_api():
         exchange = request.args.get('exchange', 'deribit')
         option_type = request.args.get('option_type', '')  # 'call', 'put' 或空字符串表示所有
         volume_change_filter = float(request.args.get('volume_change_filter', 0))  # 成交量变化过滤器，默认0表示不过滤
+        include_stats = request.args.get('include_stats', 'false').lower() == 'true'  # 是否包含统计数据
         
-        print(f"API请求参数: symbol={symbol}, time_period={time_period}, exchange={exchange}, days={days}, "
-              f"option_type={option_type}, volume_change_filter={volume_change_filter}, anomaly_only={anomaly_only}")
+        app.logger.info(f"API请求参数: symbol={symbol}, time_period={time_period}, exchange={exchange}, days={days}, "
+              f"option_type={option_type}, volume_change_filter={volume_change_filter}, anomaly_only={anomaly_only}, include_stats={include_stats}")
         
         # 确保时间周期有效
         if time_period not in Config.TIME_PERIODS:
             time_period = '4h'
         
-        # 获取偏离数据
-        deviations = get_deviation_data(
+        # 获取偏离数据和统计信息
+        deviation_data = get_deviation_data(
             symbol=symbol,
             time_period=time_period,
             is_anomaly=True if anomaly_only else None,
@@ -435,10 +444,14 @@ def deviation_data_api():
             volume_change_filter=volume_change_filter if volume_change_filter > 0 else None
         )
         
-        # 格式化数据
-        result = []
+        # 分离偏离数据和统计信息
+        deviations = deviation_data.get('deviations', [])
+        statistics = deviation_data.get('statistics', {})
+        
+        # 格式化偏离数据
+        formatted_deviations = []
         for dev in deviations:
-            result.append({
+            formatted_deviations.append({
                 'id': dev.id,
                 'timestamp': dev.timestamp.strftime('%Y-%m-%d %H:%M'),
                 'symbol': dev.symbol,
@@ -456,6 +469,16 @@ def deviation_data_api():
                 'is_anomaly': dev.is_anomaly,
                 'anomaly_level': dev.anomaly_level
             })
+        
+        # 如果客户端请求包含统计数据，则返回完整结果
+        if include_stats:
+            result = {
+                'deviations': formatted_deviations,
+                'statistics': statistics
+            }
+        else:
+            # 否则只返回偏离数据
+            result = formatted_deviations
         
         return jsonify(result)
     except Exception as e:

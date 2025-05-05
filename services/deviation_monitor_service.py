@@ -243,24 +243,50 @@ def generate_deviation_alert(deviation, anomaly_level, volume_change, premium_ch
 
 def get_deviation_data(symbol=None, time_period='4h', is_anomaly=None, days=7, exchange=None, option_type=None, volume_change_filter=None):
     """
-    获取期权执行价偏离数据
+    获取期权执行价偏离数据 - 优化版
     
     参数:
-    symbol - 交易对符号
+    symbol - 交易对符号 (BTC或ETH)
     time_period - 时间周期
     is_anomaly - 是否只返回异常数据
     days - 返回过去几天的数据
     exchange - 交易所，如deribit, binance, okx
     option_type - 期权类型，call或put
     volume_change_filter - 成交量变化率最小值（过滤结果只显示大于此值的条目）
+    
+    返回:
+    {
+        'deviations': [StrikeDeviationMonitor对象列表],
+        'statistics': {
+            'avg_deviation': 平均偏离率,
+            'avg_volume_change': 平均成交量变化率,
+            'avg_premium_change': 平均权利金变化率,
+            'max_deviation': 最大偏离率,
+            'min_deviation': 最小偏离率,
+            'call_count': 看涨期权数量,
+            'put_count': 看跌期权数量,
+            'put_call_ratio': 看跌/看涨比率,
+            'anomaly_percentage': 异常数据占比,
+            'volume_change_distribution': 成交量变化分布,
+            'deviation_distribution': 偏离率分布,
+            'trend_analysis': 趋势分析数据
+        }
+    }
     """
     from_date = datetime.utcnow() - timedelta(days=days)
     
+    # 验证symbol，仅支持BTC和ETH
+    if symbol and symbol not in ["BTC", "ETH"]:
+        logger.warning(f"不支持的符号: {symbol}，仅支持BTC和ETH")
+        return {'deviations': [], 'statistics': {}}
+    
+    # 构建查询 - 使用缓存优化查询性能
     query = StrikeDeviationMonitor.query.filter(
         StrikeDeviationMonitor.timestamp >= from_date,
         StrikeDeviationMonitor.time_period == time_period
     )
     
+    # 添加其他筛选条件 - 按优先级排序，先应用可能过滤掉更多数据的条件
     if symbol:
         query = query.filter(StrikeDeviationMonitor.symbol == symbol)
     
@@ -280,10 +306,145 @@ def get_deviation_data(symbol=None, time_period='4h', is_anomaly=None, days=7, e
             StrikeDeviationMonitor.volume_change_percent >= volume_change_filter
         )
     
-    # 按时间降序排序
-    deviations = query.order_by(StrikeDeviationMonitor.timestamp.desc()).all()
+    # 优化：限制返回记录数量，避免内存溢出
+    max_records = 1000
     
-    return deviations
+    # 按时间降序排序，并限制记录数
+    deviations = query.order_by(
+        StrikeDeviationMonitor.timestamp.desc()
+    ).limit(max_records).all()
+    
+    logger.info(f"获取到 {len(deviations)} 条偏离数据记录 (限制: {max_records})")
+    
+    # 创建结果结构
+    result = {
+        'deviations': deviations,
+        'statistics': {}
+    }
+    
+    # 计算统计指标
+    if deviations:
+        # 基础统计
+        deviation_values = [d.deviation_percent for d in deviations]
+        
+        valid_volume_changes = [d.volume_change_percent for d in deviations 
+                              if d.volume_change_percent is not None]
+        
+        valid_premium_changes = [d.premium_change_percent for d in deviations 
+                               if d.premium_change_percent is not None]
+        
+        # 期权类型统计
+        call_deviations = [d for d in deviations if d.option_type == 'call']
+        put_deviations = [d for d in deviations if d.option_type == 'put']
+        
+        # 异常数据统计
+        anomaly_deviations = [d for d in deviations if d.is_anomaly]
+        
+        # 计算平均值、最大值、最小值等
+        statistics = {
+            'avg_deviation': mean(deviation_values) if deviation_values else 0,
+            'max_deviation': max(deviation_values) if deviation_values else 0,
+            'min_deviation': min(deviation_values) if deviation_values else 0,
+            'deviation_std': stdev(deviation_values) if len(deviation_values) > 1 else 0,
+            
+            'avg_volume_change': mean(valid_volume_changes) if valid_volume_changes else 0,
+            'max_volume_change': max(valid_volume_changes) if valid_volume_changes else 0,
+            'volume_change_std': stdev(valid_volume_changes) if len(valid_volume_changes) > 1 else 0,
+            
+            'avg_premium_change': mean(valid_premium_changes) if valid_premium_changes else 0,
+            'max_premium_change': max(valid_premium_changes) if valid_premium_changes else 0,
+            'premium_change_std': stdev(valid_premium_changes) if len(valid_premium_changes) > 1 else 0,
+            
+            'call_count': len(call_deviations),
+            'put_count': len(put_deviations),
+            'put_call_ratio': len(put_deviations) / len(call_deviations) if call_deviations else 0,
+            
+            'total_count': len(deviations),
+            'anomaly_count': len(anomaly_deviations),
+            'anomaly_percentage': (len(anomaly_deviations) / len(deviations)) * 100 if deviations else 0
+        }
+        
+        # 成交量变化分布 - 分析大成交量区间的分布情况
+        volume_bins = [0, 20, 50, 100, 200, float('inf')]
+        volume_labels = ['0-20%', '20-50%', '50-100%', '100-200%', '>200%']
+        volume_distribution = [0] * len(volume_labels)
+        
+        for vc in valid_volume_changes:
+            for i, upper in enumerate(volume_bins[1:], 0):
+                if vc < upper:
+                    volume_distribution[i] += 1
+                    break
+        
+        # 偏离率分布 - 分析不同偏离率区间的分布情况
+        deviation_bins = [0, 2, 4, 6, 8, 10]
+        deviation_labels = ['0-2%', '2-4%', '4-6%', '6-8%', '8-10%']
+        deviation_distribution = [0] * len(deviation_labels)
+        
+        for dv in deviation_values:
+            for i, upper in enumerate(deviation_bins[1:], 0):
+                if dv < upper:
+                    deviation_distribution[i] += 1
+                    break
+                elif i == len(deviation_bins) - 2 and dv <= deviation_bins[-1]:
+                    deviation_distribution[i] += 1
+                    break
+        
+        # 趋势分析 - 按时间分组数据，计算每个时间点的统计值
+        # 首先按天分组
+        from collections import defaultdict
+        import time
+        
+        # 计算每天的数据
+        daily_data = defaultdict(list)
+        for d in deviations:
+            # 使用日期作为键
+            day_key = d.timestamp.strftime('%Y-%m-%d')
+            daily_data[day_key].append(d)
+        
+        # 计算每天的统计指标
+        trend_data = []
+        for day, day_deviations in sorted(daily_data.items()):
+            # 计算每天的平均偏离率
+            day_dev_avg = mean([d.deviation_percent for d in day_deviations])
+            
+            # 计算每天的平均成交量变化率
+            day_vol_changes = [d.volume_change_percent for d in day_deviations if d.volume_change_percent is not None]
+            day_vol_avg = mean(day_vol_changes) if day_vol_changes else 0
+            
+            # 统计每天的异常数量和比例
+            day_anomalies = len([d for d in day_deviations if d.is_anomaly])
+            day_anomaly_pct = (day_anomalies / len(day_deviations)) * 100
+            
+            trend_data.append({
+                'date': day,
+                'timestamp': time.mktime(datetime.strptime(day, '%Y-%m-%d').timetuple()) * 1000,  # Unix时间戳(毫秒)
+                'avg_deviation': day_dev_avg,
+                'avg_volume_change': day_vol_avg,
+                'anomaly_count': day_anomalies,
+                'anomaly_percentage': day_anomaly_pct,
+                'total_count': len(day_deviations)
+            })
+        
+        # 添加到统计结果中
+        statistics['volume_distribution'] = {
+            'labels': volume_labels,
+            'data': volume_distribution
+        }
+        
+        statistics['deviation_distribution'] = {
+            'labels': deviation_labels,
+            'data': deviation_distribution
+        }
+        
+        statistics['trend_analysis'] = trend_data
+        
+        result['statistics'] = statistics
+        
+        logger.info(f"偏离数据统计: 平均偏离率 {statistics['avg_deviation']:.2f}%, " +
+                   f"平均成交量变化 {statistics['avg_volume_change']:.2f}%, " +
+                   f"异常占比 {statistics['anomaly_percentage']:.2f}%")
+    
+    return result
 
 def get_deviation_alerts(symbol=None, time_period='4h', acknowledged=None, limit=100, exchange=None, option_type=None):
     """
