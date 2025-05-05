@@ -283,7 +283,15 @@ def set_language(lang):
 def inject_language():
     """Inject language settings into all templates"""
     lang = session.get('language', Config.DEFAULT_LANGUAGE)
+    
+    def translate(key):
+        """Translate a key based on current language"""
+        if key.lower() in translations:
+            return translations[key.lower()].get(lang, key)
+        return key
+    
     return {
         'current_language': lang,
-        'languages': Config.LANGUAGES
+        'languages': Config.LANGUAGES,
+        't': translate  # Adding translation function to template context
     }
