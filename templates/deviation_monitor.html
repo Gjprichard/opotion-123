@@ -58,6 +58,15 @@
                             <option value="100" {% if volume_change_filter == 100 %}selected{% endif %}>≥ 100%</option>
                         </select>
                     </div>
+                    <div class="col-md-2">
+                        <label for="days-filter" class="form-label">历史数据天数</label>
+                        <select class="form-select" id="days-filter">
+                            <option value="3" {% if days == 3 %}selected{% endif %}>3天</option>
+                            <option value="7" {% if days == 7 or not days %}selected{% endif %}>7天</option>
+                            <option value="14" {% if days == 14 %}selected{% endif %}>14天</option>
+                            <option value="30" {% if days == 30 %}selected{% endif %}>30天</option>
+                        </select>
+                    </div>
                     <div class="col-md-1">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="anomaly-only-filter" {% if anomaly_only %}checked{% endif %}>
