@@ -1788,7 +1788,15 @@ const VolumeAnalysisModule = {
         try {
             const symbol = document.getElementById('symbol-filter').value;
             const timePeriod = document.getElementById('time-period-filter').value;
-            const days = document.getElementById('days-filter').value;
+            
+            // 获取days参数，如果元素不存在则使用默认值7
+            let days = 7;
+            const daysFilter = document.getElementById('days-filter');
+            if (daysFilter) {
+                days = daysFilter.value;
+            } else {
+                console.log('注意: days-filter元素不存在，使用默认值7天');
+            }
             
             // 显示加载状态
             document.querySelectorAll('#volume-stats-container .card-text').forEach(el => {
@@ -1796,7 +1804,7 @@ const VolumeAnalysisModule = {
             });
             
             // 获取数据
-            console.log(`获取${symbol}的多空成交量分析数据，时间周期: ${timePeriod}...`);
+            console.log(`获取${symbol}的多空成交量分析数据，时间周期: ${timePeriod}，天数: ${days}...`);
             const response = await fetch(`/api/deviation/volume-analysis?symbol=${symbol}&time_period=${timePeriod}&days=${days}&include_history=true`);
             
             if (!response.ok) {

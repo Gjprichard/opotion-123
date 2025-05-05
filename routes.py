@@ -591,6 +591,26 @@ def deviation_volume_analysis_api():
             include_history=include_history
         )
         
+        # 增强调试日志以检查API返回数据结构
+        app.logger.info(f"Volume analysis API结果数据结构: {type(volume_data)}")
+        
+        if volume_data:
+            # 记录主要数据结构的键
+            app.logger.info(f"Volume data keys: {list(volume_data.keys() if isinstance(volume_data, dict) else [])}")
+            
+            # 记录exchange_data数据的结构
+            if isinstance(volume_data, dict) and 'exchange_data' in volume_data:
+                app.logger.info(f"Exchange data keys: {list(volume_data['exchange_data'].keys() if volume_data['exchange_data'] else [])}")
+            
+            # 记录history数据的结构
+            if isinstance(volume_data, dict) and 'history' in volume_data:
+                history_count = len(volume_data['history']) if volume_data['history'] else 0
+                app.logger.info(f"History data entries: {history_count}")
+                if history_count > 0:
+                    # 检查第一个条目的结构
+                    first_entry = volume_data['history'][0]
+                    app.logger.info(f"First history entry keys: {list(first_entry.keys() if isinstance(first_entry, dict) else [])}")
+        
         # 确保数据结构完整
         if not volume_data or not isinstance(volume_data, dict):
             app.logger.warning("返回的volume_data为空或不是字典类型")
@@ -619,6 +639,11 @@ def deviation_volume_analysis_api():
                 'put_volume': 0,
                 'market_price': 0
             }]
+            
+        # 记录最终响应结构
+        app.logger.info(f"Final volume analysis API响应结构: call_put_ratio存在: {'call_put_ratio' in volume_data}, "
+                       f"exchange_data存在: {'exchange_data' in volume_data}, "
+                       f"history存在: {'history' in volume_data}")
         
         return jsonify(volume_data)
     except Exception as e:
