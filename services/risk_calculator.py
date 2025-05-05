@@ -12,15 +12,23 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
-def calculate_risk_indicators(symbol):
+def calculate_risk_indicators(symbol, time_periods=None):
     """
-    Calculate various risk indicators based on option market data
-    Implements the reflexivity theory to identify feedback loops
+    计算各种风险指标，基于期权市场数据
+    实现反身性理论来识别市场反馈循环
+    
+    参数:
+    symbol - 要计算的交易对符号
+    time_periods - 要计算的时间周期列表，如果为None则计算所有配置的时间周期
     """
     try:
+        if time_periods is None:
+            # 默认计算所有配置的时间周期
+            time_periods = list(Config.TIME_PERIODS.keys())
+        
         logger.info(f"Calculating risk indicators for {symbol}")
         
-        # Get the latest timestamp with data available
+        # 获取最新的数据时间戳
         latest_time = db.session.query(func.max(OptionData.timestamp)).filter(
             OptionData.symbol == symbol
         ).scalar()
@@ -54,40 +62,51 @@ def calculate_risk_indicators(symbol):
             'underlying': opt.underlying_price
         } for opt in options])
         
-        # Calculate key risk indicators
+        # 计算关键风险指标
         volaxivity = calculate_volaxivity(df)
         volatility_skew = calculate_volatility_skew(df)
         put_call_ratio = calculate_put_call_ratio(df)
         reflexivity = calculate_reflexivity_indicator(df)
         market_sentiment = determine_market_sentiment(volaxivity, put_call_ratio, reflexivity)
         
-        # Create risk indicator record - convert numpy types to Python native types
-        risk_indicator = RiskIndicator(
-            symbol=str(symbol),
-            timestamp=latest_time,
-            volaxivity=float(volaxivity),
-            volatility_skew=float(volatility_skew),
-            put_call_ratio=float(put_call_ratio),
-            market_sentiment=str(market_sentiment),
-            reflexivity_indicator=float(reflexivity)
-        )
-        
-        # Calculate crypto-specific risk indicators if applicable
+        # 计算加密货币特有的风险指标（如适用）
+        crypto_risk = None
         if symbol in ['BTC', 'ETH']:
             crypto_risk = get_crypto_specific_risk(symbol, df)
+        
+        # 为每个时间周期创建风险指标记录
+        success = False
+        for period in time_periods:
+            # 创建风险指标记录 - 将numpy类型转换为Python原生类型
+            current_indicator = RiskIndicator(
+                symbol=str(symbol),
+                time_period=period,  # 设置时间周期
+                timestamp=latest_time,
+                volaxivity=float(volaxivity),
+                volatility_skew=float(volatility_skew),
+                put_call_ratio=float(put_call_ratio),
+                market_sentiment=str(market_sentiment),
+                reflexivity_indicator=float(reflexivity)
+            )
+            
+            # 添加加密货币特有指标（如适用）
             if crypto_risk:
-                risk_indicator.funding_rate = float(crypto_risk['funding_rate'])
-                risk_indicator.liquidation_risk = float(crypto_risk['liquidation_risk'])
-                logger.info(f"Added crypto-specific indicators for {symbol}: Funding Rate={crypto_risk['funding_rate']:.4f}, Liquidation Risk={crypto_risk['liquidation_risk']:.2f}")
+                current_indicator.funding_rate = float(crypto_risk['funding_rate'])
+                current_indicator.liquidation_risk = float(crypto_risk['liquidation_risk'])
+            
+            # 添加到数据库并检查阈值
+            db.session.add(current_indicator)
+            db.session.commit()
+            
+            # 检查是否超过任何风险阈值
+            check_alert_thresholds(current_indicator)
+            success = True
         
-        db.session.add(risk_indicator)
-        db.session.commit()
-        
-        # Check if any risk thresholds are crossed
-        check_alert_thresholds(risk_indicator)
+        if crypto_risk:
+            logger.info(f"Added crypto-specific indicators for {symbol}: Funding Rate={crypto_risk['funding_rate']:.4f}, Liquidation Risk={crypto_risk['liquidation_risk']:.2f}")
         
         logger.info(f"Calculated risk indicators for {symbol}: Volaxivity={volaxivity:.2f}, Skew={volatility_skew:.2f}, PCR={put_call_ratio:.2f}, Reflexivity={reflexivity:.2f}")
-        return True
+        return success
         
     except Exception as e:
         logger.error(f"Error calculating risk indicators: {str(e)}")

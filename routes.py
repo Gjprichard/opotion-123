@@ -16,57 +16,89 @@ def index():
 
 @app.route('/dashboard')
 def dashboard():
-    # Get the latest risk indicators for tracked symbols
+    # 获取时间周期参数，默认为4h
+    time_period = request.args.get('time_period', '4h')
+    
+    # 确保时间周期有效
+    if time_period not in Config.TIME_PERIODS:
+        time_period = '4h'
+    
+    # 获取每个跟踪符号的最新风险指标
     latest_risk = {}
     for symbol in Config.TRACKED_SYMBOLS:
-        indicator = RiskIndicator.query.filter_by(symbol=symbol).order_by(RiskIndicator.timestamp.desc()).first()
+        indicator = RiskIndicator.query.filter_by(
+            symbol=symbol,
+            time_period=time_period
+        ).order_by(RiskIndicator.timestamp.desc()).first()
+        
         if indicator:
             latest_risk[symbol] = indicator
     
-    # Get active alerts
-    alerts = Alert.query.filter_by(is_acknowledged=False).order_by(Alert.timestamp.desc()).limit(10).all()
+    # 获取活跃警报（未确认的）
+    alerts = Alert.query.filter_by(
+        is_acknowledged=False,
+        time_period=time_period
+    ).order_by(Alert.timestamp.desc()).limit(10).all()
     
-    # Get latest option data summary
+    # 获取最新期权数据摘要
     latest_data_time = db.session.query(func.max(OptionData.timestamp)).scalar()
-    options_count = OptionData.query.filter(OptionData.timestamp > (datetime.utcnow() - timedelta(days=1))).count()
+    options_count = OptionData.query.filter(
+        OptionData.timestamp > (datetime.utcnow() - timedelta(days=1))
+    ).count()
     
     return render_template('dashboard.html', 
                            latest_risk=latest_risk,
                            alerts=alerts,
                            latest_data_time=latest_data_time,
                            options_count=options_count,
-                           symbols=Config.TRACKED_SYMBOLS)
+                           symbols=Config.TRACKED_SYMBOLS,
+                           time_periods=Config.TIME_PERIODS,
+                           current_time_period=time_period)
 
 @app.route('/api/dashboard/data')
 def dashboard_data():
     try:
         symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
         days = int(request.args.get('days', 30))
+        time_period = request.args.get('time_period', '4h')
         
-        app.logger.info(f"Fetching dashboard data for symbol={symbol}, days={days}")
+        # 确保时间周期有效
+        if time_period not in Config.TIME_PERIODS:
+            time_period = '4h'
         
-        # Get risk indicators for the past N days
+        app.logger.info(f"Fetching dashboard data for symbol={symbol}, days={days}, time_period={time_period}")
+        
+        # 获取过去N天的风险指标数据
         from_date = datetime.utcnow() - timedelta(days=days)
         risk_data = RiskIndicator.query.filter(
             RiskIndicator.symbol == symbol,
-            RiskIndicator.timestamp > from_date
+            RiskIndicator.timestamp > from_date,
+            RiskIndicator.time_period == time_period
         ).order_by(RiskIndicator.timestamp).all()
         
-        app.logger.info(f"Found {len(risk_data)} risk indicator records for {symbol}")
+        app.logger.info(f"Found {len(risk_data)} risk indicator records for {symbol} ({time_period})")
         
-        # Format the data for chart.js
+        # 格式化数据用于chart.js
         timestamps = [r.timestamp.strftime('%Y-%m-%d %H:%M') for r in risk_data]
         volaxivity = [float(r.volaxivity) if r.volaxivity is not None else None for r in risk_data]
         volatility_skew = [float(r.volatility_skew) if r.volatility_skew is not None else None for r in risk_data]
         put_call_ratio = [float(r.put_call_ratio) if r.put_call_ratio is not None else None for r in risk_data]
         reflexivity = [float(r.reflexivity_indicator) if r.reflexivity_indicator is not None else None for r in risk_data]
         
+        # 获取当前时间周期的阈值设置
+        thresholds = {}
+        for indicator_name, periods in Config.DEFAULT_ALERT_THRESHOLDS.items():
+            if time_period in periods:
+                thresholds[indicator_name] = periods[time_period]
+        
         return jsonify({
             'timestamps': timestamps,
             'volaxivity': volaxivity,
             'volatility_skew': volatility_skew,
             'put_call_ratio': put_call_ratio,
-            'reflexivity_indicator': reflexivity
+            'reflexivity_indicator': reflexivity,
+            'thresholds': thresholds,
+            'time_period': time_period
         })
     except Exception as e:
         app.logger.error(f"Error in dashboard_data: {str(e)}", exc_info=True)
@@ -106,14 +138,19 @@ def acknowledge_alert_api():
 @app.route('/api/alerts/threshold', methods=['POST'])
 def update_threshold():
     indicator = request.json.get('indicator')
+    time_period = request.json.get('time_period', '4h')
     attention = float(request.json.get('attention'))
     warning = float(request.json.get('warning'))
     severe = float(request.json.get('severe'))
     
+    # 确保时间周期有效
+    if time_period not in Config.TIME_PERIODS:
+        time_period = '4h'
+    
     if not all([indicator, attention, warning, severe]):
         return jsonify({'success': False, 'message': 'All fields are required'}), 400
     
-    success = update_alert_threshold(indicator, attention, warning, severe)
+    success = update_alert_threshold(indicator, time_period, attention, warning, severe)
     
     if success:
         return jsonify({'success': True})
@@ -257,13 +294,21 @@ def delete_scenario(scenario_id):
 
 @app.route('/settings')
 def settings():
-    # Get current alert thresholds
-    thresholds = AlertThreshold.query.all()
+    time_period = request.args.get('time_period', '4h')
+    
+    # 确保时间周期有效
+    if time_period not in Config.TIME_PERIODS:
+        time_period = '4h'
+    
+    # 获取当前时间周期的警报阈值
+    thresholds = AlertThreshold.query.filter_by(time_period=time_period).all()
     threshold_dict = {t.indicator: t for t in thresholds}
     
     return render_template('settings.html', 
                            thresholds=threshold_dict,
-                           default_thresholds=Config.DEFAULT_ALERT_THRESHOLDS)
+                           default_thresholds=Config.DEFAULT_ALERT_THRESHOLDS,
+                           time_periods=Config.TIME_PERIODS,
+                           current_time_period=time_period)
 
 @app.route('/api/data/refresh', methods=['POST'])
 def refresh_data():
