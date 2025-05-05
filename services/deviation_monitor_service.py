@@ -88,6 +88,10 @@ def calculate_deviation_metrics(symbol, time_periods=None):
                     # 成交量变化率
                     if prev_option.volume and prev_option.volume > 0:
                         volume_change_pct = ((option.volume or 0) - prev_option.volume) / prev_option.volume * 100
+                    else:
+                        # 如果前一时段没有成交量数据，但当前有成交量，则视为100%的增长
+                        if option.volume and option.volume > 0:
+                            volume_change_pct = 100.0
                     
                     # 权利金变化率
                     if prev_option.option_price > 0:
@@ -96,6 +100,10 @@ def calculate_deviation_metrics(symbol, time_periods=None):
                     # 市场价格变化率
                     if prev_option.underlying_price > 0:
                         market_price_change_pct = (option.underlying_price - prev_option.underlying_price) / prev_option.underlying_price * 100
+                else:
+                    # 如果找不到前一时段的数据，但当前有成交量，则视为新增合约，设置默认变化率
+                    if option.volume and option.volume > 0:
+                        volume_change_pct = 100.0  # 新增合约，默认成交量增长100%
                 
                 # 检查是否是异常情况
                 is_anomaly, anomaly_level = check_deviation_anomaly(
