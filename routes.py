@@ -557,6 +557,41 @@ def acknowledge_deviation_alert_api():
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'message': 'Alert not found'}), 404
+        
+@app.route('/api/deviation/volume-analysis')
+def deviation_volume_analysis_api():
+    """获取期权执行价偏离监控的多空成交量分析数据API"""
+    try:
+        symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
+        time_period = request.args.get('time_period', '4h')
+        days = int(request.args.get('days', 7))
+        include_history = request.args.get('include_history', 'true').lower() == 'true'
+        
+        app.logger.info(f"Volume analysis API请求参数: symbol={symbol}, time_period={time_period}, "
+                       f"days={days}, include_history={include_history}")
+        
+        # 确保时间周期有效
+        if time_period not in Config.TIME_PERIODS:
+            time_period = '4h'
+        
+        # 从deviation_monitor_service中导入所需的函数
+        from services.deviation_monitor_service import get_call_put_volume_analysis
+        
+        # 获取成交量分析数据
+        volume_data = get_call_put_volume_analysis(
+            symbol=symbol,
+            time_period=time_period,
+            days=days,
+            include_history=include_history
+        )
+        
+        return jsonify(volume_data)
+    except Exception as e:
+        app.logger.error(f"Error in deviation_volume_analysis_api: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'An error occurred while fetching volume analysis data',
+            'message': str(e)
+        }), 500
 
 @app.route('/language/<lang>')
 def set_language(lang):

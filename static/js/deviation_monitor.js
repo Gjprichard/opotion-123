@@ -1749,8 +1749,437 @@ const EventHandlers = {
 };
 
 /**
+ * 多空成交量分析模块
+ */
+const VolumeAnalysisModule = {
+    // 图表对象
+    exchangeVolumeChart: null,
+    volumeTrendChart: null,
+    
+    /**
+     * 获取多空成交量分析数据
+     */
+    async fetchVolumeAnalysisData() {
+        try {
+            const symbol = document.getElementById('symbol-filter').value;
+            const timePeriod = document.getElementById('time-period-filter').value;
+            const days = document.getElementById('days-filter').value;
+            
+            // 显示加载状态
+            document.querySelectorAll('#volume-stats-container .card-text').forEach(el => {
+                el.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            });
+            
+            // 获取数据
+            console.log(`获取${symbol}的多空成交量分析数据，时间周期: ${timePeriod}...`);
+            const response = await fetch(`/api/deviation/volume-analysis?symbol=${symbol}&time_period=${timePeriod}&days=${days}&include_history=true`);
+            
+            if (!response.ok) {
+                throw new Error(`API错误 (${response.status})`);
+            }
+            
+            const data = await response.json();
+            console.log('获取到的多空分析数据:', data);
+            
+            // 更新UI
+            this.updateVolumeAnalysisUI(data);
+            
+            return data;
+        } catch (error) {
+            console.error('获取多空成交量分析数据失败:', error);
+            UIUtils.showToast('获取多空成交量分析数据失败: ' + error.message, 'danger');
+            
+            // 清空图表
+            this.updateExchangeVolumeChart({
+                exchanges: ['Deribit', 'Binance', 'OKX'],
+                call_volumes: [0, 0, 0],
+                put_volumes: [0, 0, 0]
+            });
+            
+            this.updateVolumeTrendChart({
+                timestamps: [],
+                call_volumes: [],
+                put_volumes: [],
+                call_put_ratios: [],
+                market_prices: []
+            });
+            
+            // 显示错误状态
+            this.updateStatsWithError();
+        }
+    },
+    
+    /**
+     * 更新多空成交量分析UI
+     * @param {Object} data - 多空成交量分析数据
+     */
+    updateVolumeAnalysisUI(data) {
+        if (!data) return;
+        
+        // 更新总体统计数据
+        this.updateVolumeStats(data);
+        
+        // 更新交易所成交量对比图
+        this.updateExchangeVolumeChart(this.prepareExchangeVolumeChartData(data));
+        
+        // 更新成交量趋势图
+        this.updateVolumeTrendChart(this.prepareVolumeTrendChartData(data));
+    },
+    
+    /**
+     * 更新统计数据显示
+     * @param {Object} data - 多空成交量分析数据
+     */
+    updateVolumeStats(data) {
+        try {
+            // 获取统计数据
+            const stats = data.volume_stats;
+            const anomalyStats = data.anomaly_stats;
+            
+            // 更新总成交量比例
+            const callPutRatio = DataUtils.formatNumber(data.call_put_ratio || 1.0);
+            document.getElementById('total-call-put-ratio').textContent = callPutRatio;
+            
+            // 更新看涨/看跌百分比
+            const callPercent = stats.call_volume_percent || 50;
+            const putPercent = stats.put_volume_percent || 50;
+            document.getElementById('call-volume-percent').textContent = `${DataUtils.formatNumber(callPercent)}%`;
+            document.getElementById('put-volume-percent').textContent = `${DataUtils.formatNumber(putPercent)}%`;
+            
+            // 更新进度条
+            document.getElementById('call-volume-bar').style.width = `${callPercent}%`;
+            document.getElementById('put-volume-bar').style.width = `${putPercent}%`;
+            
+            // 更新24小时变化率
+            const volumeChange24h = stats.volume_change_24h || 0;
+            const volumeChange24hText = `${DataUtils.formatNumber(volumeChange24h)}%`;
+            const volumeChange24hElement = document.getElementById('volume-change-24h');
+            volumeChange24hElement.textContent = volumeChange24hText;
+            
+            // 根据涨跌设置颜色
+            if (volumeChange24h > 0) {
+                volumeChange24hElement.classList.add('text-success');
+                volumeChange24hElement.classList.remove('text-danger');
+            } else if (volumeChange24h < 0) {
+                volumeChange24hElement.classList.add('text-danger');
+                volumeChange24hElement.classList.remove('text-success');
+            } else {
+                volumeChange24hElement.classList.remove('text-success', 'text-danger');
+            }
+            
+            // 更新看涨/看跌变化率
+            document.getElementById('call-volume-change').textContent = `${DataUtils.formatNumber(stats.call_volume_change || 0)}%`;
+            document.getElementById('put-volume-change').textContent = `${DataUtils.formatNumber(stats.put_volume_change || 0)}%`;
+            
+            // 更新异常数量
+            document.getElementById('anomaly-count').textContent = anomalyStats.total_anomalies || 0;
+            document.getElementById('call-anomaly-count').textContent = anomalyStats.call_anomalies || 0;
+            document.getElementById('put-anomaly-count').textContent = anomalyStats.put_anomalies || 0;
+            
+            // 更新预警级别
+            const alertLevel = anomalyStats.alert_level || 'normal';
+            const alertSignalElement = document.getElementById('alert-signal-level');
+            const alertLevelElement = document.getElementById('alert-level');
+            const alertTriggerElement = document.getElementById('alert-trigger');
+            
+            // 设置预警级别显示
+            alertLevelElement.textContent = this.translateAlertLevel(alertLevel);
+            alertTriggerElement.textContent = anomalyStats.alert_trigger || '无';
+            
+            // 根据级别设置颜色和图标
+            alertSignalElement.className = 'card-text h4 mb-0';
+            alertSignalElement.innerHTML = this.getAlertLevelIcon(alertLevel);
+            
+            if (alertLevel === 'attention') {
+                alertSignalElement.classList.add('text-warning');
+            } else if (alertLevel === 'warning') {
+                alertSignalElement.classList.add('text-orange');
+            } else if (alertLevel === 'severe') {
+                alertSignalElement.classList.add('text-danger');
+            } else {
+                alertSignalElement.classList.add('text-success');
+            }
+        } catch (e) {
+            console.error('更新统计数据显示出错:', e);
+            this.updateStatsWithError();
+        }
+    },
+    
+    /**
+     * 显示统计数据错误状态
+     */
+    updateStatsWithError() {
+        document.getElementById('total-call-put-ratio').textContent = '--';
+        document.getElementById('call-volume-percent').textContent = '--';
+        document.getElementById('put-volume-percent').textContent = '--';
+        document.getElementById('volume-change-24h').textContent = '--';
+        document.getElementById('call-volume-change').textContent = '--';
+        document.getElementById('put-volume-change').textContent = '--';
+        document.getElementById('anomaly-count').textContent = '--';
+        document.getElementById('call-anomaly-count').textContent = '--';
+        document.getElementById('put-anomaly-count').textContent = '--';
+        document.getElementById('alert-signal-level').innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i>';
+        document.getElementById('alert-level').textContent = '--';
+        document.getElementById('alert-trigger').textContent = '数据获取错误';
+    },
+    
+    /**
+     * 准备交易所成交量对比图数据
+     * @param {Object} data - 多空成交量分析数据
+     * @returns {Object} 图表数据
+     */
+    prepareExchangeVolumeChartData(data) {
+        const exchangeData = data.exchange_data || {};
+        const exchanges = Object.keys(exchangeData);
+        const callVolumes = [];
+        const putVolumes = [];
+        
+        // 格式化交易所名称
+        const formattedExchanges = exchanges.map(name => name.charAt(0).toUpperCase() + name.slice(1));
+        
+        // 获取每个交易所的看涨/看跌成交量
+        for (const exchange of exchanges) {
+            const exchangeInfo = exchangeData[exchange] || {};
+            callVolumes.push(exchangeInfo.call_volume || 0);
+            putVolumes.push(exchangeInfo.put_volume || 0);
+        }
+        
+        return {
+            exchanges: formattedExchanges,
+            call_volumes: callVolumes,
+            put_volumes: putVolumes
+        };
+    },
+    
+    /**
+     * 准备成交量趋势图数据
+     * @param {Object} data - 多空成交量分析数据
+     * @returns {Object} 图表数据
+     */
+    prepareVolumeTrendChartData(data) {
+        const history = data.history || [];
+        const timestamps = [];
+        const callVolumes = [];
+        const putVolumes = [];
+        const callPutRatios = [];
+        const marketPrices = [];
+        
+        // 获取历史数据
+        for (const item of history) {
+            timestamps.push(item.timestamp);
+            callVolumes.push(item.call_volume || 0);
+            putVolumes.push(item.put_volume || 0);
+            callPutRatios.push(item.call_put_ratio || 1.0);
+            marketPrices.push(item.market_price || 0);
+        }
+        
+        return {
+            timestamps,
+            call_volumes: callVolumes,
+            put_volumes: putVolumes,
+            call_put_ratios: callPutRatios,
+            market_prices: marketPrices
+        };
+    },
+    
+    /**
+     * 更新交易所成交量对比图
+     * @param {Object} data - 图表数据
+     */
+    updateExchangeVolumeChart(data) {
+        const ctx = document.getElementById('exchange-volume-chart').getContext('2d');
+        
+        // 如果图表已存在，销毁它
+        if (this.exchangeVolumeChart) {
+            this.exchangeVolumeChart.destroy();
+        }
+        
+        // 创建新图表
+        this.exchangeVolumeChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.exchanges,
+                datasets: [
+                    {
+                        label: '看涨期权成交量',
+                        data: data.call_volumes,
+                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: '看跌期权成交量',
+                        data: data.put_volumes,
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '成交量'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: '交易所'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.raw;
+                                return `${label}: ${value}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    },
+    
+    /**
+     * 更新成交量趋势图
+     * @param {Object} data - 图表数据
+     */
+    updateVolumeTrendChart(data) {
+        const ctx = document.getElementById('volume-trend-chart').getContext('2d');
+        
+        // 如果图表已存在，销毁它
+        if (this.volumeTrendChart) {
+            this.volumeTrendChart.destroy();
+        }
+        
+        // 创建新图表
+        this.volumeTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.timestamps,
+                datasets: [
+                    {
+                        label: '看涨/看跌比率',
+                        data: data.call_put_ratios,
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                        yAxisID: 'y1',
+                        tension: 0.3,
+                        fill: false
+                    },
+                    {
+                        label: '市场价格',
+                        data: data.market_prices,
+                        borderColor: 'rgba(13, 110, 253, 1)',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        yAxisID: 'y',
+                        tension: 0.3,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: '市场价格'
+                        }
+                    },
+                    y1: {
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: '看涨/看跌比率'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.raw;
+                                return `${label}: ${value}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    },
+    
+    /**
+     * 翻译预警级别
+     * @param {string} level - 预警级别
+     * @returns {string} 翻译后的预警级别
+     */
+    translateAlertLevel(level) {
+        const translations = {
+            'normal': '正常',
+            'attention': '注意',
+            'warning': '警告',
+            'severe': '严重'
+        };
+        return translations[level] || level;
+    },
+    
+    /**
+     * 获取预警级别图标
+     * @param {string} level - 预警级别
+     * @returns {string} 图标HTML
+     */
+    getAlertLevelIcon(level) {
+        switch (level) {
+            case 'attention':
+                return '<i class="fas fa-exclamation-circle"></i> 注意';
+            case 'warning':
+                return '<i class="fas fa-exclamation-triangle"></i> 警告';
+            case 'severe':
+                return '<i class="fas fa-radiation-alt"></i> 严重';
+            default:
+                return '<i class="fas fa-check-circle"></i> 正常';
+        }
+    }
+};
+
+/**
  * 当页面加载完成时初始化
  */
 document.addEventListener('DOMContentLoaded', function() {
     EventHandlers.init();
+    
+    // 初始化后立即获取多空成交量分析数据
+    VolumeAnalysisModule.fetchVolumeAnalysisData();
+    
+    // 添加过滤器事件监听器，确保当过滤器改变时，同时更新成交量分析数据
+    document.getElementById('filter-form').addEventListener('submit', function() {
+        VolumeAnalysisModule.fetchVolumeAnalysisData();
+    });
+    
+    // 为刷新按钮添加事件监听器
+    document.getElementById('refresh-data-btn').addEventListener('click', function() {
+        VolumeAnalysisModule.fetchVolumeAnalysisData();
+    });
 });

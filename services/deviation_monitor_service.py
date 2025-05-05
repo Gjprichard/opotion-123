@@ -489,5 +489,268 @@ def acknowledge_deviation_alert(alert_id):
         alert.is_acknowledged = True
         db.session.commit()
         return True
+        
+def get_call_put_volume_analysis(symbol, time_period='4h', days=7, include_history=True):
+    """
+    获取期权成交量多空分析数据
+    
+    参数:
+    symbol - 交易对符号
+    time_period - 时间周期 ('15m', '1h', '4h', '1d', '7d')
+    days - 数据天数
+    include_history - 是否包含历史数据
+    
+    返回:
+    {
+        'call_put_ratio': 总的看涨/看跌比率,
+        'volume_stats': {
+            'total_volume': 总成交量,
+            'call_volume': 看涨期权总成交量,
+            'put_volume': 看跌期权总成交量,
+            'call_volume_percent': 看涨期权成交量百分比,
+            'put_volume_percent': 看跌期权成交量百分比,
+            'volume_change_24h': 24小时成交量变化率,
+            'call_volume_change': 看涨期权24小时成交量变化率,
+            'put_volume_change': 看跌期权24小时成交量变化率
+        },
+        'exchange_data': {
+            'deribit': {
+                'call_volume': 看涨期权成交量,
+                'put_volume': 看跌期权成交量,
+                'ratio': 看涨/看跌比率
+            },
+            'binance': {...},
+            'okx': {...}
+        },
+        'anomaly_stats': {
+            'total_anomalies': 异常总数,
+            'call_anomalies': 看涨期权异常数,
+            'put_anomalies': 看跌期权异常数,
+            'alert_level': 预警级别,
+            'alert_trigger': 触发条件
+        },
+        'history': [
+            {
+                'timestamp': 时间戳,
+                'call_put_ratio': 看涨/看跌比率,
+                'call_volume': 看涨期权成交量,
+                'put_volume': 看跌期权成交量,
+                'market_price': 市场价格
+            }
+        ]
+    }
+    """
+    try:
+        # 设置时间范围
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(days=days)
+        
+        # 查询所有交易所的数据
+        exchanges = ['deribit', 'binance', 'okx']
+        
+        # 获取每个交易所的看涨/看跌期权成交量数据
+        exchange_data = {}
+        total_call_volume = 0
+        total_put_volume = 0
+        anomaly_call_count = 0
+        anomaly_put_count = 0
+        
+        # 处理每个交易所的数据
+        for exchange in exchanges:
+            # 获取该交易所的期权数据
+            call_data = StrikeDeviationMonitor.query.filter(
+                StrikeDeviationMonitor.symbol == symbol,
+                StrikeDeviationMonitor.timestamp >= start_time,
+                StrikeDeviationMonitor.timestamp <= end_time,
+                StrikeDeviationMonitor.time_period == time_period,
+                StrikeDeviationMonitor.exchange == exchange,
+                StrikeDeviationMonitor.option_type == 'call'
+            ).all()
+            
+            put_data = StrikeDeviationMonitor.query.filter(
+                StrikeDeviationMonitor.symbol == symbol,
+                StrikeDeviationMonitor.timestamp >= start_time,
+                StrikeDeviationMonitor.timestamp <= end_time,
+                StrikeDeviationMonitor.time_period == time_period,
+                StrikeDeviationMonitor.exchange == exchange,
+                StrikeDeviationMonitor.option_type == 'put'
+            ).all()
+            
+            # 计算该交易所的成交量统计
+            call_volume = sum(item.volume for item in call_data)
+            put_volume = sum(item.volume for item in put_data)
+            ratio = call_volume / put_volume if put_volume > 0 else 1.0
+            
+            # 计算异常数据
+            anomaly_calls = sum(1 for item in call_data if item.is_anomaly)
+            anomaly_puts = sum(1 for item in put_data if item.is_anomaly)
+            
+            # 添加到交易所数据
+            exchange_data[exchange] = {
+                'call_volume': call_volume,
+                'put_volume': put_volume,
+                'ratio': ratio,
+                'anomaly_calls': anomaly_calls,
+                'anomaly_puts': anomaly_puts
+            }
+            
+            # 累加到总量
+            total_call_volume += call_volume
+            total_put_volume += put_volume
+            anomaly_call_count += anomaly_calls
+            anomaly_put_count += anomaly_puts
+        
+        # 计算总体统计数据
+        total_volume = total_call_volume + total_put_volume
+        call_volume_percent = (total_call_volume / total_volume * 100) if total_volume > 0 else 50
+        put_volume_percent = (total_put_volume / total_volume * 100) if total_volume > 0 else 50
+        call_put_ratio = total_call_volume / total_put_volume if total_put_volume > 0 else 1.0
+        
+        # 计算24小时变化率 (与前一天对比)
+        yesterday_end = end_time - timedelta(days=1)
+        yesterday_start = yesterday_end - timedelta(days=1)
+        
+        yesterday_data = StrikeDeviationMonitor.query.filter(
+            StrikeDeviationMonitor.symbol == symbol,
+            StrikeDeviationMonitor.timestamp >= yesterday_start,
+            StrikeDeviationMonitor.timestamp <= yesterday_end,
+            StrikeDeviationMonitor.time_period == time_period
+        ).all()
+        
+        yesterday_call_volume = sum(item.volume for item in yesterday_data if item.option_type == 'call')
+        yesterday_put_volume = sum(item.volume for item in yesterday_data if item.option_type == 'put')
+        
+        # 计算变化率
+        call_volume_change = ((total_call_volume - yesterday_call_volume) / yesterday_call_volume * 100) if yesterday_call_volume > 0 else 100
+        put_volume_change = ((total_put_volume - yesterday_put_volume) / yesterday_put_volume * 100) if yesterday_put_volume > 0 else 100
+        total_volume_change = ((total_volume - (yesterday_call_volume + yesterday_put_volume)) / 
+                              (yesterday_call_volume + yesterday_put_volume) * 100) if (yesterday_call_volume + yesterday_put_volume) > 0 else 100
+        
+        # 生成预警信号和级别
+        alert_level = 'normal'
+        alert_trigger = '无'
+        
+        # 根据规则判断预警级别 
+        # 多空比例变化过大或成交量变化过大
+        if call_put_ratio > 1.5 or call_put_ratio < 0.65:
+            alert_level = 'attention'
+            alert_trigger = f'多空比例异常: {call_put_ratio:.2f}'
+        
+        if abs(total_volume_change) > 100:
+            alert_level = 'warning'
+            alert_trigger = f'成交量异常波动: {total_volume_change:.1f}%'
+            
+        # 如果成交量变化很大且多空比例显著变化，则为严重预警
+        if abs(total_volume_change) > 150 and (call_put_ratio > 1.8 or call_put_ratio < 0.5):
+            alert_level = 'severe'
+            alert_trigger = f'成交量剧增且多空显著偏离: 成交量变化 {total_volume_change:.1f}%, 多空比 {call_put_ratio:.2f}'
+            
+        # 异常比例过高
+        total_anomalies = anomaly_call_count + anomaly_put_count
+        total_contracts = len(yesterday_data)
+        if total_contracts > 0 and total_anomalies / total_contracts > 0.5:
+            if alert_level != 'severe':
+                alert_level = 'warning'
+                alert_trigger = f'异常合约比例过高: {total_anomalies}/{total_contracts}'
+        
+        # 创建结果对象
+        result = {
+            'call_put_ratio': call_put_ratio,
+            'volume_stats': {
+                'total_volume': total_volume,
+                'call_volume': total_call_volume,
+                'put_volume': total_put_volume,
+                'call_volume_percent': call_volume_percent,
+                'put_volume_percent': put_volume_percent,
+                'volume_change_24h': total_volume_change,
+                'call_volume_change': call_volume_change,
+                'put_volume_change': put_volume_change
+            },
+            'exchange_data': exchange_data,
+            'anomaly_stats': {
+                'total_anomalies': anomaly_call_count + anomaly_put_count,
+                'call_anomalies': anomaly_call_count,
+                'put_anomalies': anomaly_put_count,
+                'alert_level': alert_level,
+                'alert_trigger': alert_trigger
+            }
+        }
+        
+        # 如果需要包含历史数据
+        if include_history:
+            history = []
+            
+            # 获取历史数据
+            # 按天聚合数据
+            time_range = end_time - start_time
+            delta = timedelta(hours=8)  # 以8小时为间隔
+            intervals = int(time_range.total_seconds() / delta.total_seconds())
+            
+            # 保护措施，确保间隔数量不超过30
+            intervals = min(intervals, 30)
+            
+            for i in range(intervals):
+                period_end = end_time - (delta * i)
+                period_start = period_end - delta
+                
+                # 查询该时间段的数据
+                period_data = StrikeDeviationMonitor.query.filter(
+                    StrikeDeviationMonitor.symbol == symbol,
+                    StrikeDeviationMonitor.timestamp >= period_start,
+                    StrikeDeviationMonitor.timestamp <= period_end,
+                    StrikeDeviationMonitor.time_period == time_period
+                ).all()
+                
+                # 计算该段的统计数据
+                period_call_volume = sum(item.volume for item in period_data if item.option_type == 'call')
+                period_put_volume = sum(item.volume for item in period_data if item.option_type == 'put')
+                period_ratio = period_call_volume / period_put_volume if period_put_volume > 0 else 1.0
+                
+                # 获取市场价格
+                market_prices = [item.market_price for item in period_data if item.market_price]
+                market_price = np.mean(market_prices) if market_prices else 0
+                
+                history.append({
+                    'timestamp': period_end.strftime('%Y-%m-%d %H:%M'),
+                    'call_put_ratio': period_ratio,
+                    'call_volume': period_call_volume,
+                    'put_volume': period_put_volume,
+                    'market_price': market_price
+                })
+            
+            # 按时间正序排列
+            history.reverse()
+            result['history'] = history
+            
+        return result
+            
+    except Exception as e:
+        logger.error(f"获取多空成交量分析数据时出错: {str(e)}", exc_info=True)
+        return {
+            'error': str(e),
+            'call_put_ratio': 1.0,
+            'volume_stats': {
+                'total_volume': 0,
+                'call_volume': 0,
+                'put_volume': 0,
+                'call_volume_percent': 50,
+                'put_volume_percent': 50,
+                'volume_change_24h': 0,
+                'call_volume_change': 0,
+                'put_volume_change': 0
+            },
+            'exchange_data': {
+                'deribit': {'call_volume': 0, 'put_volume': 0, 'ratio': 1.0, 'anomaly_calls': 0, 'anomaly_puts': 0},
+                'binance': {'call_volume': 0, 'put_volume': 0, 'ratio': 1.0, 'anomaly_calls': 0, 'anomaly_puts': 0},
+                'okx': {'call_volume': 0, 'put_volume': 0, 'ratio': 1.0, 'anomaly_calls': 0, 'anomaly_puts': 0}
+            },
+            'anomaly_stats': {
+                'total_anomalies': 0,
+                'call_anomalies': 0,
+                'put_anomalies': 0,
+                'alert_level': 'normal',
+                'alert_trigger': '数据获取错误'
+            }
+        }
     
     return False

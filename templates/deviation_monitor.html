@@ -8,6 +8,118 @@
     </div>
 </div>
 
+<!-- 多空成交量分析面板 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow border-left-info">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">看涨/看跌期权成交量分析</h6>
+                <div class="text-muted small">
+                    <i class="fas fa-info-circle"></i> 实时监控多空分布状态
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- 交易所成交量对比图 -->
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold text-info">交易所多空成交量对比</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="exchange-volume-chart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 成交量时序趋势图 -->
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold text-info">多空成交量趋势</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="volume-trend-chart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 多空成交量统计信息 -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold text-info">多空成交量统计与预警</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row" id="volume-stats-container">
+                                    <!-- 统计信息将由JavaScript动态填充 -->
+                                    <div class="col-md-3 mb-2">
+                                        <div class="card bg-light">
+                                            <div class="card-body py-2">
+                                                <h6 class="card-title text-primary mb-1">总成交量比例</h6>
+                                                <p class="card-text h4 mb-0" id="total-call-put-ratio">--</p>
+                                                <div class="progress mt-2">
+                                                    <div class="progress-bar bg-success" role="progressbar" style="width: 50%" id="call-volume-bar"></div>
+                                                    <div class="progress-bar bg-danger" role="progressbar" style="width: 50%" id="put-volume-bar"></div>
+                                                </div>
+                                                <div class="d-flex justify-content-between mt-1">
+                                                    <small class="text-success">看涨 <span id="call-volume-percent">--</span></small>
+                                                    <small class="text-danger">看跌 <span id="put-volume-percent">--</span></small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-3 mb-2">
+                                        <div class="card bg-light">
+                                            <div class="card-body py-2">
+                                                <h6 class="card-title text-primary mb-1">24小时变化率</h6>
+                                                <p class="card-text h4 mb-0" id="volume-change-24h">--</p>
+                                                <div class="d-flex justify-content-between mt-2">
+                                                    <small class="text-success">看涨: <span id="call-volume-change">--</span></small>
+                                                    <small class="text-danger">看跌: <span id="put-volume-change">--</span></small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-3 mb-2">
+                                        <div class="card bg-light">
+                                            <div class="card-body py-2">
+                                                <h6 class="card-title text-primary mb-1">异常执行价数量</h6>
+                                                <p class="card-text h4 mb-0" id="anomaly-count">--</p>
+                                                <div class="d-flex justify-content-between mt-2">
+                                                    <small class="text-success">看涨: <span id="call-anomaly-count">--</span></small>
+                                                    <small class="text-danger">看跌: <span id="put-anomaly-count">--</span></small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-3 mb-2">
+                                        <div class="card bg-light">
+                                            <div class="card-body py-2">
+                                                <h6 class="card-title text-primary mb-1">预警信号</h6>
+                                                <p class="card-text h4 mb-0" id="alert-signal-level">--</p>
+                                                <div class="d-flex justify-content-between mt-2">
+                                                    <small>级别: <span id="alert-level">--</span></small>
+                                                    <small>触发条件: <span id="alert-trigger">--</span></small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Filters Card -->
 <div class="row mb-4">
     <div class="col-12">
