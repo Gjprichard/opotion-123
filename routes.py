@@ -162,6 +162,11 @@ def historical():
     symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
     option_type = request.args.get('type', 'call')
     days = int(request.args.get('days', 30))
+    time_period = request.args.get('time_period', '4h')
+    
+    # 确保时间周期有效
+    if time_period not in Config.TIME_PERIODS:
+        time_period = '4h'
     
     # Get historical option data
     from_date = datetime.utcnow() - timedelta(days=days)
@@ -181,6 +186,8 @@ def historical():
                            symbol=symbol,
                            option_type=option_type,
                            days=days,
+                           time_periods=Config.TIME_PERIODS,
+                           current_time_period=time_period,
                            symbols=Config.TRACKED_SYMBOLS,
                            expirations=[exp[0] for exp in expirations])
 

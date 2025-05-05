@@ -47,9 +47,21 @@
                             <input type="number" id="strike-filter" class="form-control" placeholder="Enter strike">
                         </div>
                         <div class="col-md-2 filter-group">
-                            <label for="days-filter" class="form-label">Time Period (Days)</label>
+                            <label for="time-period-filter" class="form-label">{{ t('time_period') }}</label>
+                            <select id="time-period-filter" class="form-select">
+                                {% for period_key, period_info in time_periods.items() %}
+                                <option value="{{ period_key }}" {% if period_key == current_time_period %}selected{% endif %}>
+                                    {{ period_info.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 filter-group">
+                            <label for="days-filter" class="form-label">Time Range</label>
                             <select id="days-filter" class="form-select">
-                                <option value="30" selected>30 Days</option>
+                                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 Days</option>
+                                <option value="14" {% if days == 14 %}selected{% endif %}>Last 14 Days</option>
+                                <option value="30" {% if days == 30 or not days %}selected{% endif %}>Last 30 Days</option>
                             </select>
                         </div>
                         <div class="col-md-2 filter-group">
@@ -181,9 +193,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const expiration = document.getElementById('expiration-filter').value;
         const strike = document.getElementById('strike-filter').value;
         const days = document.getElementById('days-filter').value;
+        const timePeriod = document.getElementById('time-period-filter').value;
 
         // Redirect to the filtered view
-        window.location.href = `/historical?symbol=${symbol}&type=${optionType}&days=${days}${expiration ? '&expiration=' + expiration : ''}${strike ? '&strike=' + strike : ''}`;
+        window.location.href = `/historical?symbol=${symbol}&type=${optionType}&days=${days}&time_period=${timePeriod}${expiration ? '&expiration=' + expiration : ''}${strike ? '&strike=' + strike : ''}`;
     }
 
     // Fetch historical data for charts
@@ -192,8 +205,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const optionType = document.getElementById('option-type-filter').value;
         const expiration = document.getElementById('expiration-filter').value;
         const strike = document.getElementById('strike-filter').value;
-
-        fetch(`/api/historical/data?symbol=${symbol}&type=${optionType}${expiration ? '&expiration=' + expiration : ''}${strike ? '&strike=' + strike : ''}`)
+        const timePeriod = document.getElementById('time-period-filter').value;
+        
+        fetch(`/api/historical/data?symbol=${symbol}&type=${optionType}&time_period=${timePeriod}${expiration ? '&expiration=' + expiration : ''}${strike ? '&strike=' + strike : ''}`)
             .then(response => response.json())
             .then(data => {
                 historicalData = data;
