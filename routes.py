@@ -355,7 +355,7 @@ def refresh_data():
     else:
         return jsonify({'success': False, 'message': 'Error fetching option data'}), 500
 
-@app.route('/deviation-monitor')
+@app.route('/deviation_monitor')
 def deviation_monitor():
     """期权执行价偏离监控页面"""
     symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])

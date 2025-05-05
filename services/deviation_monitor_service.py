@@ -490,13 +490,13 @@ def acknowledge_deviation_alert(alert_id):
         db.session.commit()
         return True
         
-def get_call_put_volume_analysis(symbol, time_period='4h', days=7, include_history=True):
+def get_call_put_volume_analysis(symbol, time_period='15m', days=7, include_history=True):
     """
     获取期权成交量多空分析数据
     
     参数:
     symbol - 交易对符号
-    time_period - 时间周期 ('15m', '1h', '4h', '1d', '7d')
+    time_period - 时间周期，默认'15m' ('15m', '1h', '4h', '1d', '7d')
     days - 数据天数
     include_history - 是否包含历史数据
     
