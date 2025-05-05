@@ -9,7 +9,7 @@ from services.data_service import fetch_latest_option_data, fetch_historical_dat
 from services.risk_calculator import calculate_risk_indicators, run_scenario_analysis
 from services.alert_service import get_active_alerts, acknowledge_alert, update_alert_threshold
 from services.deviation_monitor_service import calculate_deviation_metrics, get_deviation_data, get_deviation_alerts, acknowledge_deviation_alert
-from services.exchange_api import set_api_credentials, get_underlying_price
+from services.exchange_api_ccxt import set_api_credentials, get_underlying_price, test_connection
 from translations import translations
 
 @app.route('/')
@@ -591,26 +591,20 @@ def test_api_connection():
         # 暂时设置API凭证用于测试
         set_api_credentials(api_key, api_secret)
         
-        # 测试获取BTC价格
-        btc_price = get_underlying_price('BTC')
-        if not btc_price:
+        # 使用CCXT API测试连接
+        success, message = test_connection()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
             return jsonify({
                 'success': False,
-                'message': 'Failed to get BTC price. API connection failed.'
+                'message': message
             }), 400
-        
-        # 测试获取ETH价格
-        eth_price = get_underlying_price('ETH')
-        if not eth_price:
-            return jsonify({
-                'success': False,
-                'message': 'Failed to get ETH price. API connection failed.'
-            }), 400
-        
-        return jsonify({
-            'success': True,
-            'message': f'Connection successful! BTC: ${btc_price:.2f}, ETH: ${eth_price:.2f}'
-        })
+    
     except Exception as e:
         app.logger.error(f"Error testing API connection: {str(e)}", exc_info=True)
         return jsonify({

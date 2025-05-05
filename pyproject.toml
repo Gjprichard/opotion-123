@@ -20,4 +20,5 @@ dependencies = [
     "trafilatura>=2.0.0",
     "websocket-client>=1.8.0",
     "requests>=2.32.3",
+    "ccxt>=4.4.78",
 ]

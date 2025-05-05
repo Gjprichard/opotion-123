@@ -32,16 +32,15 @@ def fetch_latest_option_data(symbol):
         
         # 检查是否有有效的API凭证
         api_credential = ApiCredential.query.filter_by(api_name='deribit', is_active=True).first()
-        if not api_credential:
-            logger.warning(f"No active API credentials found for Deribit, using fallback data for {symbol}")
-            return fallback_option_data(symbol)
         
-        # 设置API凭证
-        from services.exchange_api import set_api_credentials
-        set_api_credentials(api_credential.api_key, api_credential.api_secret)
+        # 从CCXT集成的API获取当前的期权市场数据
+        from services.exchange_api_ccxt import set_api_credentials, get_option_market_data
         
-        # 从Deribit API获取当前的期权市场数据
-        from services.exchange_api import get_option_market_data
+        # 如果有API凭证，设置它们
+        if api_credential:
+            set_api_credentials(api_credential.api_key, api_credential.api_secret)
+        
+        # 获取期权市场数据
         option_data_list = get_option_market_data(symbol)
         
         if not option_data_list:
@@ -107,7 +106,12 @@ def fallback_option_data(symbol):
         ]
         
         # 尝试从API获取标的资产价格，如果失败则使用模拟价格
-        current_price = get_underlying_price(symbol)
+        try:
+            from services.exchange_api_ccxt import get_underlying_price
+            current_price = get_underlying_price(symbol)
+        except Exception:
+            current_price = None
+            
         if not current_price:
             base_price = get_base_price_for_symbol(symbol)
             current_price = base_price
