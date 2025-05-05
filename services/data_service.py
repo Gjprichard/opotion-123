@@ -153,21 +153,21 @@ def generate_option_data(symbol, expiration, strike, option_type, current_price,
     volume = int(random.uniform(50, 500) * atm_factor)
     open_interest = int(random.uniform(200, 2000) * atm_factor)
     
-    # Create the option data object
+    # Create the option data object - convert numpy types to Python native types
     option_data = OptionData(
-        symbol=symbol,
+        symbol=str(symbol),
         expiration_date=expiration,
-        strike_price=strike,
-        option_type=option_type,
-        underlying_price=current_price,
-        option_price=option_price,
-        volume=volume,
-        open_interest=open_interest,
-        implied_volatility=implied_volatility,
-        delta=delta,
-        gamma=gamma,
-        theta=theta,
-        vega=vega,
+        strike_price=float(strike),
+        option_type=str(option_type),
+        underlying_price=float(current_price),
+        option_price=float(option_price),
+        volume=int(volume),
+        open_interest=int(open_interest),
+        implied_volatility=float(implied_volatility),
+        delta=float(delta),
+        gamma=float(gamma),
+        theta=float(theta),
+        vega=float(vega),
         timestamp=timestamp
     )
     
