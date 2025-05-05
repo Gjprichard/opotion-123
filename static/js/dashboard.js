@@ -232,6 +232,13 @@ function createReflexivityChart(data) {
         // 使用正确的数据字段名称
         const reflexivityData = data.reflexivity_indicator || [];
         
+        // 获取标题文本
+        let chartTitle = '反身性指标';
+        const titleElement = document.querySelector('.card-header h6');
+        if (titleElement) {
+            chartTitle = titleElement.textContent;
+        }
+        
         reflexivityChart = new Chart(ctx, {
             type: 'line',
             data: {
@@ -248,40 +255,44 @@ function createReflexivityChart(data) {
                     }
                 ]
             },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                },
-                title: {
-                    display: true,
-                    text: chartTitle
-                }
-            },
-            scales: {
-                x: {
-                    ticks: {
-                        maxTicksLimit: 10
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    title: {
+                        display: true,
+                        text: chartTitle
                     }
                 },
-                y: {
-                    beginAtZero: true,
-                    max: 1,
-                    ticks: {
-                        callback: function(value) {
-                            return (value * 100) + '%';
+                scales: {
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 10
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        ticks: {
+                            callback: function(value) {
+                                return (value * 100) + '%';
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Error creating reflexivity chart:', error);
+        document.getElementById('reflexivity-chart-container').innerHTML = '<div class="alert alert-danger">Error creating chart: ' + error.message + '</div>';
+    }
 }
 
 // Update the risk chart with new data
