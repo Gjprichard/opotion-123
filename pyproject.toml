@@ -17,4 +17,5 @@ dependencies = [
     "scipy>=1.15.2",
     "flask-login>=0.6.3",
     "sqlalchemy>=2.0.40",
+    "trafilatura>=2.0.0",
 ]

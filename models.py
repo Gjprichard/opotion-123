@@ -90,3 +90,45 @@ class ScenarioAnalysis(db.Model):
     
     def __repr__(self):
         return f'<ScenarioAnalysis {self.name} {self.symbol}>'
+
+class StrikeDeviationMonitor(db.Model):
+    """Model to store options strike price deviation monitoring data"""
+    id = db.Column(db.Integer, primary_key=True)
+    symbol = db.Column(db.String(20), nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    time_period = db.Column(db.String(10), default='4h', nullable=False, index=True)
+    strike_price = db.Column(db.Float, nullable=False)
+    market_price = db.Column(db.Float, nullable=False)
+    deviation_percent = db.Column(db.Float, nullable=False)  # Absolute deviation percentage
+    option_type = db.Column(db.String(4), nullable=False)  # 'call' or 'put'
+    expiration_date = db.Column(db.Date, nullable=False)
+    volume = db.Column(db.Integer, nullable=False)
+    volume_change_percent = db.Column(db.Float, nullable=True)  # Volume change from previous period
+    premium = db.Column(db.Float, nullable=False)  # Option premium/price
+    premium_change_percent = db.Column(db.Float, nullable=True)  # Premium change from previous period
+    market_price_change_percent = db.Column(db.Float, nullable=True)  # Market price change from previous period
+    is_anomaly = db.Column(db.Boolean, default=False)  # Whether this deviation is considered anomalous
+    anomaly_level = db.Column(db.String(20), nullable=True)  # 'attention', 'warning', 'severe'
+    
+    def __repr__(self):
+        return f'<StrikeDeviationMonitor {self.symbol} {self.strike_price} {self.deviation_percent}% {self.time_period}>'
+        
+class DeviationAlert(db.Model):
+    """Model to store strike price deviation alerts"""
+    id = db.Column(db.Integer, primary_key=True)
+    symbol = db.Column(db.String(20), nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    time_period = db.Column(db.String(10), default='4h', nullable=False)
+    strike_price = db.Column(db.Float, nullable=False)
+    market_price = db.Column(db.Float, nullable=False)
+    deviation_percent = db.Column(db.Float, nullable=False)
+    alert_type = db.Column(db.String(20), nullable=False)  # 'attention', 'warning', 'severe'
+    message = db.Column(db.Text, nullable=False)
+    trigger_condition = db.Column(db.String(100), nullable=False)  # What triggered the alert
+    volume_change = db.Column(db.Float, nullable=True)
+    premium_change = db.Column(db.Float, nullable=True)
+    price_change = db.Column(db.Float, nullable=True)
+    is_acknowledged = db.Column(db.Boolean, default=False)
+    
+    def __repr__(self):
+        return f'<DeviationAlert {self.symbol} {self.strike_price} {self.alert_type} {self.time_period}>'

@@ -6,6 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from services.data_service import fetch_latest_option_data, cleanup_old_data
 from services.risk_calculator import calculate_risk_indicators
+from services.deviation_monitor_service import calculate_deviation_metrics
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,11 @@ def update_all_option_data():
             if success:
                 # Calculate risk indicators
                 calculate_risk_indicators(symbol)
-                logger.info(f"Updated option data and risk indicators for {symbol}")
+                
+                # Calculate strike price deviation metrics
+                calculate_deviation_metrics(symbol)
+                
+                logger.info(f"Updated option data, risk indicators and deviation metrics for {symbol}")
             else:
                 logger.warning(f"Failed to update option data for {symbol}")
                 
