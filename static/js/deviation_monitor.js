@@ -1897,7 +1897,10 @@ const VolumeAnalysisModule = {
      * @param {Object} data - 包含exchange_data的多交易所数据
      */
     createExchangeComparisonCharts(data) {
-        if (!data || !data.exchange_data) return;
+        if (!data || !data.exchange_data) {
+            console.log('没有有效的交易所数据用于创建对比图表');
+            return;
+        }
         
         try {
             // 确保至少有一个交易所的数据
@@ -1915,25 +1918,48 @@ const VolumeAnalysisModule = {
                 const existingExchange = exchanges[0];
                 const existingData = data.exchange_data[existingExchange];
                 
-                // 使用现有交易所的数据创建图表
-                // 创建看跌/看涨比率对比图
-                this.createPCRComparisonChart(data.exchange_data);
+                try {
+                    // 创建看跌/看涨比率对比图
+                    this.createPCRComparisonChart(data.exchange_data);
+                } catch (err) {
+                    console.error('创建PCR对比图表出错:', err);
+                }
                 
-                // 创建成交量分布图
-                this.createVolumeDistributionChart(data.exchange_data);
+                try {
+                    // 创建成交量分布图
+                    this.createVolumeDistributionChart(data.exchange_data);
+                } catch (err) {
+                    console.error('创建成交量分布图表出错:', err);
+                }
                 
-                // 创建期权溢价差异图
-                this.createPremiumSpreadChart(data.exchange_data);
+                try {
+                    // 创建期权溢价差异图
+                    this.createPremiumSpreadChart(data.exchange_data);
+                } catch (err) {
+                    console.error('创建期权溢价差异图表出错:', err);
+                }
             } else {
                 // 多个交易所数据，正常创建图表
-                // 创建看跌/看涨比率对比图
-                this.createPCRComparisonChart(data.exchange_data);
+                try {
+                    // 创建看跌/看涨比率对比图
+                    this.createPCRComparisonChart(data.exchange_data);
+                } catch (err) {
+                    console.error('创建PCR对比图表出错:', err);
+                }
                 
-                // 创建成交量分布图
-                this.createVolumeDistributionChart(data.exchange_data);
+                try {
+                    // 创建成交量分布图
+                    this.createVolumeDistributionChart(data.exchange_data);
+                } catch (err) {
+                    console.error('创建成交量分布图表出错:', err);
+                }
                 
-                // 创建期权溢价差异图
-                this.createPremiumSpreadChart(data.exchange_data);
+                try {
+                    // 创建期权溢价差异图
+                    this.createPremiumSpreadChart(data.exchange_data);
+                } catch (err) {
+                    console.error('创建期权溢价差异图表出错:', err);
+                }
             }
         } catch (e) {
             console.error('创建交易所对比图表出错:', e);
