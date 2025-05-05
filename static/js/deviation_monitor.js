@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化事件监听器
     setupEventListeners();
     
+    // 添加测试输出提示
+    console.log('初始化偏离监控成功，版本: 2025.05.05.001');
+    
     // 获取初始数据
     fetchDeviationData();
     fetchRiskData();
