@@ -1099,16 +1099,24 @@ const DataService = {
             // 解析响应数据
             const result = await response.json();
             
-            // 验证数据格式
-            if (!result || !result.data) {
+            // 适应后端不同的响应格式
+            let data = [];
+            let stats = null;
+            
+            if (Array.isArray(result)) {
+                // 当include_stats=false时，后端直接返回数组
+                data = result;
+            } else if (result.deviations && Array.isArray(result.deviations)) {
+                // 当include_stats=true时，后端返回包含deviations和statistics的对象
+                data = result.deviations;
+                stats = result.statistics || null;
+            } else {
+                console.error('Unexpected response format:', result);
                 throw new Error('Invalid response format');
             }
             
             // 存储数据
-            this.deviationData = result.data;
-            
-            // 处理统计数据
-            const stats = result.stats || null;
+            this.deviationData = data;
             
             // 打印日志
             console.log(`Received ${this.deviationData.length} records and statistics from API`);
