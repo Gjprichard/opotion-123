@@ -64,7 +64,7 @@ def calculate_deviation_metrics(symbol, time_periods=None):
             if key not in prev_option_map or opt.timestamp > prev_option_map[key].timestamp:
                 prev_option_map[key] = opt
         
-        # 计算偏离率，并筛选出偏离10%以上且成交量不为0的合约
+        # 计算偏离率，并筛选出偏离率小于或等于10%且成交量不为0的合约
         for option in current_options:
             # 跳过成交量为0的期权
             if option.volume is None or option.volume == 0:
@@ -73,8 +73,8 @@ def calculate_deviation_metrics(symbol, time_periods=None):
             # 计算偏离率
             deviation_percent = abs((option.strike_price - current_market_price) / current_market_price * 100)
             
-            # 只关注偏离率大于等于10%的期权
-            if deviation_percent >= Config.OPTION_STRIKE_RANGE_PCT:  # 10%
+            # 只关注偏离率小于或等于10%的期权
+            if deviation_percent <= Config.OPTION_STRIKE_RANGE_PCT:  # 10%
                 # 查找前一时间段的同一合约
                 key = f"{option.option_type}_{option.strike_price}_{option.expiration_date}"
                 prev_option = prev_option_map.get(key)

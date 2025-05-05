@@ -74,6 +74,85 @@
     </div>
 </div>
 
+<!-- Risk Monitoring Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2 risk-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="risk-level text-primary">{{ t('volaxivity') }}</div>
+                        <div class="risk-value mb-1" id="volaxivity-value">--</div>
+                        <div class="progress">
+                            <div id="volaxivity-indicator" class="progress-bar risk-indicator" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-chart-area fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2 risk-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="risk-level text-success">{{ t('volatility_skew') }}</div>
+                        <div class="risk-value mb-1" id="volatility-skew-value">--</div>
+                        <div class="progress">
+                            <div id="skew-indicator" class="progress-bar risk-indicator" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-balance-scale fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2 risk-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="risk-level text-info">{{ t('put_call_ratio') }}</div>
+                        <div class="risk-value mb-1" id="put-call-ratio-value">--</div>
+                        <div class="progress">
+                            <div id="pcr-indicator" class="progress-bar risk-indicator" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-exchange-alt fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2 risk-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="risk-level text-warning">{{ t('reflexivity_indicator') }}</div>
+                        <div class="risk-value mb-1" id="reflexivity-value">--</div>
+                        <div class="progress">
+                            <div id="reflexivity-indicator" class="progress-bar risk-indicator" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-sync-alt fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Active Alerts Card -->
 <div class="row mb-4">
     <div class="col-12">
@@ -235,8 +314,9 @@
             });
         });
         
-        // Fetch initial data for charts
+        // Fetch initial data for charts and risk indicators
         fetchDeviationData();
+        fetchRiskData();
     });
     
     function applyFilters() {
@@ -257,11 +337,139 @@
         refreshBtn.disabled = true;
         
         // Fetch fresh data
-        fetchDeviationData(true).finally(() => {
+        Promise.all([
+            fetchDeviationData(true),
+            fetchRiskData()
+        ]).finally(() => {
             // Restore button state after fetch completes (success or failure)
             refreshBtn.innerHTML = originalText;
             refreshBtn.disabled = false;
         });
+    }
+    
+    async function fetchRiskData() {
+        const symbol = document.getElementById('symbol-filter').value;
+        const timePeriod = document.getElementById('time-period-filter').value;
+        
+        try {
+            const response = await fetch(`/api/dashboard/data?symbol=${symbol}&days=30&time_period=${timePeriod}`);
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Update risk indicator values
+                updateRiskIndicators(symbol, data, timePeriod);
+            } else {
+                console.error('Error fetching risk data:', data.message);
+            }
+        } catch (error) {
+            console.error('Fetch error for risk data:', error);
+        }
+    }
+    
+    function updateRiskIndicators(symbol, data, timePeriod) {
+        if (!data || !data.timestamps || data.timestamps.length === 0) {
+            console.warn('No risk data available');
+            return;
+        }
+        
+        // Get the latest data point
+        const lastIndex = data.timestamps.length - 1;
+        const volaxivity = data.volaxivity ? data.volaxivity[lastIndex] : null;
+        const volatilitySkew = data.volatility_skew ? data.volatility_skew[lastIndex] : null;
+        const putCallRatio = data.put_call_ratio ? data.put_call_ratio[lastIndex] : null;
+        const reflexivity = data.reflexivity_indicator ? data.reflexivity_indicator[lastIndex] : null;
+        
+        // Update UI values
+        updateElementText('volaxivity-value', volaxivity ? volaxivity.toFixed(2) : 'N/A');
+        updateElementText('volatility-skew-value', volatilitySkew ? volatilitySkew.toFixed(2) : 'N/A');
+        updateElementText('put-call-ratio-value', putCallRatio ? putCallRatio.toFixed(2) : 'N/A');
+        updateElementText('reflexivity-value', reflexivity ? (reflexivity * 100).toFixed(2) + '%' : 'N/A');
+        
+        // Set thresholds based on time period
+        let volaxivityLevels, skewLevels, pcrLevels, reflexivityLevels;
+        
+        switch(timePeriod) {
+            case '15m':
+                volaxivityLevels = [15, 25, 35];
+                skewLevels = [0.3, 0.7, 1.2];
+                pcrLevels = [1.1, 1.4, 1.8];
+                reflexivityLevels = [0.2, 0.4, 0.6];
+                break;
+            case '1h':
+                volaxivityLevels = [18, 28, 38];
+                skewLevels = [0.4, 0.8, 1.3];
+                pcrLevels = [1.15, 1.45, 1.9];
+                reflexivityLevels = [0.25, 0.45, 0.65];
+                break;
+            case '4h':
+                volaxivityLevels = [20, 30, 40];
+                skewLevels = [0.5, 1.0, 1.5];
+                pcrLevels = [1.2, 1.5, 2.0];
+                reflexivityLevels = [0.3, 0.5, 0.7];
+                break;
+            case '1d':
+                volaxivityLevels = [22, 32, 42];
+                skewLevels = [0.6, 1.1, 1.6];
+                pcrLevels = [1.25, 1.55, 2.1];
+                reflexivityLevels = [0.35, 0.55, 0.75];
+                break;
+            case '7d':
+                volaxivityLevels = [25, 35, 45];
+                skewLevels = [0.7, 1.2, 1.7];
+                pcrLevels = [1.3, 1.6, 2.2];
+                reflexivityLevels = [0.4, 0.6, 0.8];
+                break;
+            case '30d':
+                volaxivityLevels = [30, 40, 50];
+                skewLevels = [0.8, 1.3, 1.8];
+                pcrLevels = [1.35, 1.7, 2.3];
+                reflexivityLevels = [0.45, 0.65, 0.85];
+                break;
+            default:
+                volaxivityLevels = [20, 30, 40];
+                skewLevels = [0.5, 1.0, 1.5];
+                pcrLevels = [1.2, 1.5, 2.0];
+                reflexivityLevels = [0.3, 0.5, 0.7];
+        }
+        
+        // Update risk level indicators
+        updateRiskLevelIndicator('volaxivity-indicator', volaxivity, volaxivityLevels);
+        updateRiskLevelIndicator('skew-indicator', volatilitySkew, skewLevels);
+        updateRiskLevelIndicator('pcr-indicator', putCallRatio, pcrLevels);
+        updateRiskLevelIndicator('reflexivity-indicator', reflexivity, reflexivityLevels);
+    }
+    
+    function updateElementText(elementId, text) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = text;
+        }
+    }
+    
+    function updateRiskLevelIndicator(elementId, value, thresholds) {
+        const indicator = document.getElementById(elementId);
+        if (!indicator) return;
+        
+        // Remove previous classes
+        indicator.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info', 'bg-secondary');
+        
+        // Determine risk level
+        if (value === null || value === undefined) {
+            indicator.classList.add('bg-secondary');
+            indicator.style.width = '0%';
+        } else if (value < thresholds[0]) {
+            indicator.classList.add('bg-success');
+            indicator.style.width = (value / thresholds[0] * 25) + '%';
+        } else if (value < thresholds[1]) {
+            indicator.classList.add('bg-info');
+            indicator.style.width = '50%';
+        } else if (value < thresholds[2]) {
+            indicator.classList.add('bg-warning');
+            indicator.style.width = '75%';
+        } else {
+            indicator.classList.add('bg-danger');
+            indicator.style.width = '100%';
+        }
     }
     
     async function fetchDeviationData(showToastOnSuccess = false) {
