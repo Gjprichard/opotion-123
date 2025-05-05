@@ -219,28 +219,35 @@ function createRiskChart(data) {
 
 // Create the reflexivity chart
 function createReflexivityChart(data) {
-    const ctx = document.getElementById('reflexivity-chart').getContext('2d');
-    
-    // Get translated labels from the DOM
-    const reflexivityLabel = document.querySelector('.risk-level:nth-child(4)').textContent;
-    const chartTitle = document.querySelector('.card-header h6').textContent;
-    
-    reflexivityChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.timestamps,
-            datasets: [
-                {
-                    label: reflexivityLabel,
-                    data: data.reflexivity,
-                    borderColor: 'rgba(153, 102, 255, 1)',
-                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true
-                }
-            ]
-        },
+    try {
+        const ctx = document.getElementById('reflexivity-chart').getContext('2d');
+        
+        // 获取翻译标签，使用更可靠的选择器并提供默认值
+        let reflexivityLabel = '反身性指标';
+        const reflexivityElement = document.querySelector('.risk-level.text-warning');
+        if (reflexivityElement) {
+            reflexivityLabel = reflexivityElement.textContent;
+        }
+        
+        // 使用正确的数据字段名称
+        const reflexivityData = data.reflexivity_indicator || [];
+        
+        reflexivityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.timestamps,
+                datasets: [
+                    {
+                        label: reflexivityLabel,
+                        data: reflexivityData,
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -288,9 +295,13 @@ function updateRiskChart(data) {
 
 // Update the reflexivity chart with new data
 function updateReflexivityChart(data) {
-    reflexivityChart.data.labels = data.timestamps;
-    reflexivityChart.data.datasets[0].data = data.reflexivity;
-    reflexivityChart.update();
+    try {
+        reflexivityChart.data.labels = data.timestamps;
+        reflexivityChart.data.datasets[0].data = data.reflexivity_indicator || [];
+        reflexivityChart.update();
+    } catch (error) {
+        console.error('Error updating reflexivity chart:', error);
+    }
 }
 
 // Update market sentiment indicators
