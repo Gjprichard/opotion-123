@@ -42,6 +42,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if request.path == '/deviation-monitor' %}active{% endif %}" href="/deviation-monitor">
+                                <i class="fas fa-exclamation-triangle me-1"></i> {{ t('strike_deviation') }}
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if request.path == '/scenario' %}active{% endif %}" href="/scenario">
                                 <i class="fas fa-flask me-1"></i> {{ t('scenario') }}
                             </a>

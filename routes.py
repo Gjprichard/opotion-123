@@ -3,11 +3,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 
 from app import app, db
-from models import OptionData, RiskIndicator, Alert, AlertThreshold, ScenarioAnalysis
+from models import OptionData, RiskIndicator, Alert, AlertThreshold, ScenarioAnalysis, StrikeDeviationMonitor, DeviationAlert
 from config import Config
 from services.data_service import fetch_latest_option_data, fetch_historical_data
 from services.risk_calculator import calculate_risk_indicators, run_scenario_analysis
 from services.alert_service import get_active_alerts, acknowledge_alert, update_alert_threshold
+from services.deviation_monitor_service import calculate_deviation_metrics, get_deviation_data, get_deviation_alerts, acknowledge_deviation_alert
 from translations import translations
 
 @app.route('/')
@@ -342,6 +343,163 @@ def refresh_data():
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'message': 'Error fetching option data'}), 500
+
+@app.route('/deviation-monitor')
+def deviation_monitor():
+    """期权执行价偏离监控页面"""
+    symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
+    time_period = request.args.get('time_period', '4h')
+    anomaly_only = request.args.get('anomaly_only', 'false').lower() == 'true'
+    days = int(request.args.get('days', 7))
+    
+    # 确保时间周期有效
+    if time_period not in Config.TIME_PERIODS:
+        time_period = '4h'
+    
+    # 获取偏离数据
+    deviations = get_deviation_data(
+        symbol=symbol,
+        time_period=time_period,
+        is_anomaly=True if anomaly_only else None,
+        days=days
+    )
+    
+    # 获取未确认的偏离警报
+    active_alerts = get_deviation_alerts(
+        symbol=symbol,
+        time_period=time_period,
+        acknowledged=False
+    )
+    
+    # 获取所有可用的到期日期
+    expiration_dates = db.session.query(OptionData.expiration_date).filter(
+        OptionData.symbol == symbol
+    ).distinct().order_by(OptionData.expiration_date).all()
+    
+    return render_template('deviation_monitor.html',
+                          deviations=deviations,
+                          active_alerts=active_alerts,
+                          symbol=symbol,
+                          days=days,
+                          anomaly_only=anomaly_only,
+                          symbols=Config.TRACKED_SYMBOLS,
+                          time_periods=Config.TIME_PERIODS,
+                          current_time_period=time_period,
+                          expiration_dates=[exp[0] for exp in expiration_dates])
+
+@app.route('/api/deviation/data')
+def deviation_data_api():
+    """获取期权执行价偏离数据API"""
+    try:
+        symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
+        time_period = request.args.get('time_period', '4h')
+        anomaly_only = request.args.get('anomaly_only', 'false').lower() == 'true'
+        days = int(request.args.get('days', 7))
+        
+        # 确保时间周期有效
+        if time_period not in Config.TIME_PERIODS:
+            time_period = '4h'
+        
+        # 获取偏离数据
+        deviations = get_deviation_data(
+            symbol=symbol,
+            time_period=time_period,
+            is_anomaly=True if anomaly_only else None,
+            days=days
+        )
+        
+        # 格式化数据
+        result = []
+        for dev in deviations:
+            result.append({
+                'id': dev.id,
+                'timestamp': dev.timestamp.strftime('%Y-%m-%d %H:%M'),
+                'symbol': dev.symbol,
+                'strike_price': dev.strike_price,
+                'market_price': dev.market_price,
+                'deviation_percent': dev.deviation_percent,
+                'option_type': dev.option_type,
+                'expiration_date': dev.expiration_date.strftime('%Y-%m-%d'),
+                'volume': dev.volume,
+                'volume_change_percent': dev.volume_change_percent,
+                'premium': dev.premium,
+                'premium_change_percent': dev.premium_change_percent,
+                'market_price_change_percent': dev.market_price_change_percent,
+                'is_anomaly': dev.is_anomaly,
+                'anomaly_level': dev.anomaly_level
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"Error in deviation_data_api: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'An error occurred while fetching deviation data',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/deviation/alerts')
+def deviation_alerts_api():
+    """获取期权执行价偏离警报API"""
+    try:
+        symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
+        time_period = request.args.get('time_period', '4h')
+        acknowledged = request.args.get('acknowledged')
+        
+        if acknowledged is not None:
+            acknowledged = acknowledged.lower() == 'true'
+        
+        # 确保时间周期有效
+        if time_period not in Config.TIME_PERIODS:
+            time_period = '4h'
+        
+        # 获取偏离警报
+        alerts = get_deviation_alerts(
+            symbol=symbol,
+            time_period=time_period,
+            acknowledged=acknowledged
+        )
+        
+        # 格式化数据
+        result = []
+        for alert in alerts:
+            result.append({
+                'id': alert.id,
+                'timestamp': alert.timestamp.strftime('%Y-%m-%d %H:%M'),
+                'symbol': alert.symbol,
+                'strike_price': alert.strike_price,
+                'market_price': alert.market_price,
+                'deviation_percent': alert.deviation_percent,
+                'alert_type': alert.alert_type,
+                'message': alert.message,
+                'trigger_condition': alert.trigger_condition,
+                'volume_change': alert.volume_change,
+                'premium_change': alert.premium_change,
+                'price_change': alert.price_change,
+                'is_acknowledged': alert.is_acknowledged
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"Error in deviation_alerts_api: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'An error occurred while fetching deviation alerts',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/deviation/acknowledge', methods=['POST'])
+def acknowledge_deviation_alert_api():
+    """确认期权执行价偏离警报API"""
+    alert_id = request.json.get('alert_id')
+    
+    if not alert_id:
+        return jsonify({'success': False, 'message': 'Alert ID is required'}), 400
+    
+    success = acknowledge_deviation_alert(alert_id)
+    
+    if success:
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'message': 'Alert not found'}), 404
 
 @app.route('/language/<lang>')
 def set_language(lang):

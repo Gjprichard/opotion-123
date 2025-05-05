@@ -1,0 +1,566 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h3 mb-0 text-gray-800">{{ t('option_deviation_monitor') }}</h1>
+        <p class="text-muted">{{ t('monitor_options_with_strike_prices_deviating') }} &plusmn;10% {{ t('from_market_price') }}</p>
+    </div>
+</div>
+
+<!-- Filters Card -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow border-left-primary">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">{{ t('filters') }}</h6>
+            </div>
+            <div class="card-body">
+                <form id="filter-form" class="row g-3 align-items-end">
+                    <!-- Symbol -->
+                    <div class="col-md-2 mb-2">
+                        <label for="symbol-filter" class="form-label">{{ t('symbol') }}</label>
+                        <select class="form-select" id="symbol-filter">
+                            {% for sym in symbols %}
+                            <option value="{{ sym }}" {% if sym == symbol %}selected{% endif %}>{{ sym }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Time Period -->
+                    <div class="col-md-2 mb-2">
+                        <label for="time-period-filter" class="form-label">{{ t('time_period') }}</label>
+                        <select class="form-select" id="time-period-filter">
+                            {% for period_key, period_info in time_periods.items() %}
+                            <option value="{{ period_key }}" {% if period_key == current_time_period %}selected{% endif %}>{{ period_info.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Days -->
+                    <div class="col-md-2 mb-2">
+                        <label for="days-filter" class="form-label">{{ t('days') }}</label>
+                        <select class="form-select" id="days-filter">
+                            <option value="1" {% if days == 1 %}selected{% endif %}>1 {{ t('day') }}</option>
+                            <option value="3" {% if days == 3 %}selected{% endif %}>3 {{ t('days') }}</option>
+                            <option value="7" {% if days == 7 %}selected{% endif %}>7 {{ t('days') }}</option>
+                            <option value="14" {% if days == 14 %}selected{% endif %}>14 {{ t('days') }}</option>
+                            <option value="30" {% if days == 30 %}selected{% endif %}>30 {{ t('days') }}</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Show anomalies only -->
+                    <div class="col-md-3 mb-2">
+                        <div class="form-check mt-4">
+                            <input class="form-check-input" type="checkbox" id="anomaly-only-filter" {% if anomaly_only %}checked{% endif %}>
+                            <label class="form-check-label" for="anomaly-only-filter">
+                                {{ t('show_anomalies_only') }}
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Apply Filters Button -->
+                    <div class="col-md-3 mb-2 text-end">
+                        <button type="button" class="btn btn-primary" id="apply-filters-btn">
+                            {{ t('apply_filters') }}
+                        </button>
+                        <button type="button" class="btn btn-success ms-2" id="refresh-data-btn">
+                            <i class="fas fa-sync-alt"></i> {{ t('refresh') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Alerts Card -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow border-left-danger">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-danger">{{ t('active_deviation_alerts') }}</h6>
+            </div>
+            <div class="card-body">
+                {% if active_alerts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>{{ t('time') }}</th>
+                                <th>{{ t('symbol') }}</th>
+                                <th>{{ t('strike') }}</th>
+                                <th>{{ t('deviation') }}</th>
+                                <th>{{ t('type') }}</th>
+                                <th>{{ t('trigger') }}</th>
+                                <th>{{ t('action') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="active-alerts-body">
+                            {% for alert in active_alerts %}
+                            <tr data-alert-id="{{ alert.id }}">
+                                <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ alert.symbol }}</td>
+                                <td>{{ alert.strike_price }}</td>
+                                <td>{{ alert.deviation_percent|round(2) }}%</td>
+                                <td>
+                                    <span class="badge bg-{{ 'info' if alert.alert_type == 'attention' else ('warning' if alert.alert_type == 'warning' else 'danger') }}">
+                                        {{ alert.alert_type.capitalize() }}
+                                    </span>
+                                </td>
+                                <td>{{ alert.trigger_condition }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary acknowledge-alert" data-alert-id="{{ alert.id }}">
+                                        <i class="fas fa-check"></i> {{ t('acknowledge') }}
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                    <p class="lead">{{ t('no_active_deviation_alerts') }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">{{ t('deviation_volume_premium_chart') }}</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="deviation-chart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Deviation Data Table -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">{{ t('deviation_data') }}</h6>
+                <div class="dropdown no-arrow">
+                    <button class="btn btn-sm btn-outline-secondary" id="export-csv">
+                        <i class="fas fa-download fa-sm"></i> {{ t('export_csv') }}
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="deviation-table">
+                        <thead>
+                            <tr>
+                                <th>{{ t('time') }}</th>
+                                <th>{{ t('strike') }}</th>
+                                <th>{{ t('market_price') }}</th>
+                                <th>{{ t('deviation') }}</th>
+                                <th>{{ t('type') }}</th>
+                                <th>{{ t('expiration') }}</th>
+                                <th>{{ t('volume') }}</th>
+                                <th>{{ t('volume_change') }}</th>
+                                <th>{{ t('premium') }}</th>
+                                <th>{{ t('premium_change') }}</th>
+                                <th>{{ t('market_change') }}</th>
+                                <th>{{ t('status') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deviation-table-body">
+                            {% for dev in deviations %}
+                            <tr {% if dev.is_anomaly %}class="table-{{ 'info' if dev.anomaly_level == 'attention' else ('warning' if dev.anomaly_level == 'warning' else 'danger') }}"{% endif %}>
+                                <td>{{ dev.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ dev.strike_price }}</td>
+                                <td>{{ dev.market_price }}</td>
+                                <td>{{ dev.deviation_percent|round(2) }}%</td>
+                                <td>{{ dev.option_type.upper() }}</td>
+                                <td>{{ dev.expiration_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ dev.volume }}</td>
+                                <td>{{ dev.volume_change_percent|round(2) if dev.volume_change_percent else '-' }}%</td>
+                                <td>{{ dev.premium }}</td>
+                                <td>{{ dev.premium_change_percent|round(2) if dev.premium_change_percent else '-' }}%</td>
+                                <td>{{ dev.market_price_change_percent|round(2) if dev.market_price_change_percent else '-' }}%</td>
+                                <td>
+                                    {% if dev.is_anomaly %}
+                                    <span class="badge bg-{{ 'info' if dev.anomaly_level == 'attention' else ('warning' if dev.anomaly_level == 'warning' else 'danger') }}">
+                                        {{ dev.anomaly_level.capitalize() }}
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-success">{{ t('normal') }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container for notifications -->
+<div class="position-fixed bottom-0 end-0 p-3" id="toast-container" style="z-index: 5"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let deviationData = [];
+    let deviationChart = null;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle filter application
+        document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
+        
+        // Handle refresh button
+        document.getElementById('refresh-data-btn').addEventListener('click', refreshData);
+        
+        // Handle CSV export
+        document.getElementById('export-csv').addEventListener('click', exportCsv);
+        
+        // Handle alert acknowledgement
+        document.querySelectorAll('.acknowledge-alert').forEach(button => {
+            button.addEventListener('click', function() {
+                const alertId = this.getAttribute('data-alert-id');
+                acknowledgeAlert(alertId);
+            });
+        });
+        
+        // Fetch initial data for charts
+        fetchDeviationData();
+    });
+    
+    function applyFilters() {
+        const symbol = document.getElementById('symbol-filter').value;
+        const timePeriod = document.getElementById('time-period-filter').value;
+        const days = document.getElementById('days-filter').value;
+        const anomalyOnly = document.getElementById('anomaly-only-filter').checked;
+        
+        // Redirect to the filtered view
+        window.location.href = `/deviation-monitor?symbol=${symbol}&time_period=${timePeriod}&days=${days}&anomaly_only=${anomalyOnly}`;
+    }
+    
+    function refreshData() {
+        // Show spinner on refresh button
+        const refreshBtn = document.getElementById('refresh-data-btn');
+        const originalText = refreshBtn.innerHTML;
+        refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Refreshing...';
+        refreshBtn.disabled = true;
+        
+        // Fetch fresh data
+        fetchDeviationData(true).finally(() => {
+            // Restore button state after fetch completes (success or failure)
+            refreshBtn.innerHTML = originalText;
+            refreshBtn.disabled = false;
+        });
+    }
+    
+    async function fetchDeviationData(showToastOnSuccess = false) {
+        const symbol = document.getElementById('symbol-filter').value;
+        const timePeriod = document.getElementById('time-period-filter').value;
+        const days = document.getElementById('days-filter').value;
+        const anomalyOnly = document.getElementById('anomaly-only-filter').checked;
+        
+        try {
+            const response = await fetch(`/api/deviation/data?symbol=${symbol}&time_period=${timePeriod}&days=${days}&anomaly_only=${anomalyOnly}`);
+            const data = await response.json();
+            
+            if (response.ok) {
+                deviationData = data;
+                createDeviationChart(data);
+                updateDeviationTable(data);
+                
+                if (showToastOnSuccess) {
+                    showToast('Data refreshed successfully', 'success');
+                }
+            } else {
+                console.error('Error fetching deviation data:', data.message);
+                showToast(`Error loading data: ${data.message}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Fetch error:', error);
+            showToast('Error connecting to server', 'danger');
+        }
+    }
+    
+    function createDeviationChart(data) {
+        // Sort data by timestamp
+        data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Extract data for chart
+        const timestamps = data.map(item => item.timestamp);
+        const deviationPercents = data.map(item => item.deviation_percent);
+        const volumeChanges = data.map(item => item.volume_change_percent || 0);
+        const premiumChanges = data.map(item => item.premium_change_percent || 0);
+        
+        // Create chart
+        const ctx = document.getElementById('deviation-chart').getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (deviationChart) {
+            deviationChart.destroy();
+        }
+        
+        deviationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [
+                    {
+                        label: 'Deviation %',
+                        data: deviationPercents,
+                        borderColor: 'rgba(78, 115, 223, 1)',
+                        backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Volume Change %',
+                        data: volumeChanges,
+                        borderColor: 'rgba(28, 200, 138, 1)',
+                        backgroundColor: 'rgba(28, 200, 138, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Premium Change %',
+                        data: premiumChanges,
+                        borderColor: 'rgba(246, 194, 62, 1)',
+                        backgroundColor: 'rgba(246, 194, 62, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 10
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Deviation %'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Change %'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    function updateDeviationTable(data) {
+        const tableBody = document.getElementById('deviation-table-body');
+        tableBody.innerHTML = '';
+        
+        data.forEach(item => {
+            const row = document.createElement('tr');
+            
+            // Add anomaly highlighting
+            if (item.is_anomaly) {
+                const levelClass = item.anomaly_level === 'attention' ? 'info' : 
+                                  item.anomaly_level === 'warning' ? 'warning' : 'danger';
+                row.classList.add(`table-${levelClass}`);
+            }
+            
+            row.innerHTML = `
+                <td>${item.timestamp}</td>
+                <td>${item.strike_price}</td>
+                <td>${item.market_price}</td>
+                <td>${item.deviation_percent.toFixed(2)}%</td>
+                <td>${item.option_type.toUpperCase()}</td>
+                <td>${item.expiration_date}</td>
+                <td>${item.volume}</td>
+                <td>${item.volume_change_percent ? item.volume_change_percent.toFixed(2) + '%' : '-'}</td>
+                <td>${item.premium}</td>
+                <td>${item.premium_change_percent ? item.premium_change_percent.toFixed(2) + '%' : '-'}</td>
+                <td>${item.market_price_change_percent ? item.market_price_change_percent.toFixed(2) + '%' : '-'}</td>
+                <td>
+                    ${item.is_anomaly ? 
+                      `<span class="badge bg-${item.anomaly_level === 'attention' ? 'info' : (item.anomaly_level === 'warning' ? 'warning' : 'danger')}">
+                          ${item.anomaly_level.charAt(0).toUpperCase() + item.anomaly_level.slice(1)}
+                       </span>` : 
+                      '<span class="badge bg-success">Normal</span>'}
+                </td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+    }
+    
+    function acknowledgeAlert(alertId) {
+        fetch('/api/deviation/acknowledge', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ alert_id: alertId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Remove the alert from UI
+                const alertRow = document.querySelector(`tr[data-alert-id="${alertId}"]`);
+                if (alertRow && alertRow.parentNode) {
+                    alertRow.parentNode.removeChild(alertRow);
+                }
+                
+                // Show success message
+                showToast('Alert acknowledged', 'success');
+                
+                // If no more alerts, show the "no alerts" message
+                const alertsBody = document.getElementById('active-alerts-body');
+                if (alertsBody && alertsBody.children.length === 0) {
+                    const alertsCard = alertsBody.closest('.card-body');
+                    if (alertsCard) {
+                        alertsCard.innerHTML = `
+                            <div class="text-center py-4">
+                                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                                <p class="lead">No active deviation alerts</p>
+                            </div>
+                        `;
+                    }
+                }
+            } else {
+                showToast(`Error: ${data.message}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error connecting to server', 'danger');
+        });
+    }
+    
+    function exportCsv() {
+        if (deviationData.length === 0) {
+            showToast('No data to export', 'warning');
+            return;
+        }
+        
+        // Define CSV headers
+        const headers = [
+            'Timestamp', 'Symbol', 'Strike Price', 'Market Price', 'Deviation %', 
+            'Option Type', 'Expiration Date', 'Volume', 'Volume Change %', 
+            'Premium', 'Premium Change %', 'Market Price Change %', 'Is Anomaly', 'Anomaly Level'
+        ];
+        
+        // Create CSV content
+        const csvRows = [headers.join(',')];
+        
+        deviationData.forEach(item => {
+            const row = [
+                item.timestamp,
+                item.symbol,
+                item.strike_price,
+                item.market_price,
+                item.deviation_percent,
+                item.option_type,
+                item.expiration_date,
+                item.volume,
+                item.volume_change_percent || '',
+                item.premium,
+                item.premium_change_percent || '',
+                item.market_price_change_percent || '',
+                item.is_anomaly,
+                item.anomaly_level || ''
+            ];
+            
+            // Escape any commas in the data
+            const escapedRow = row.map(field => {
+                if (field === null || field === undefined) return '';
+                const str = String(field);
+                return str.includes(',') ? `"${str}"` : str;
+            });
+            
+            csvRows.push(escapedRow.join(','));
+        });
+        
+        // Create a download link
+        const csvContent = 'data:text/csv;charset=utf-8,' + csvRows.join('\n');
+        const encodedUri = encodeURI(csvContent);
+        
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `deviation_data_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    function showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toast-container');
+        
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        
+        const bsToast = new bootstrap.Toast(toast, {
+            autohide: true,
+            delay: 3000
+        });
+        
+        bsToast.show();
+        
+        // Remove the toast from the DOM after it's hidden
+        toast.addEventListener('hidden.bs.toast', function() {
+            toastContainer.removeChild(toast);
+        });
+    }
+</script>
+{% endblock %}

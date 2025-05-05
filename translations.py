@@ -167,5 +167,127 @@ translations = {
     'estimated_pnl': {
         'en': 'Estimated P&L',
         'zh': '预计盈亏'
+    },
+    
+    # Strike Deviation Monitor
+    'strike_deviation': {
+        'en': 'Strike Deviation',
+        'zh': '执行价偏离'
+    },
+    'option_deviation_monitor': {
+        'en': 'Option Strike Price Deviation Monitor',
+        'zh': '期权执行价偏离监控'
+    },
+    'monitor_options_with_strike_prices_deviating': {
+        'en': 'Monitor options with strike prices deviating',
+        'zh': '监控执行价偏离市场价'
+    },
+    'from_market_price': {
+        'en': 'from market price',
+        'zh': '的期权合约'
+    },
+    'filters': {
+        'en': 'Filters',
+        'zh': '筛选条件'
+    },
+    'days': {
+        'en': 'Days',
+        'zh': '天数'
+    },
+    'day': {
+        'en': 'Day',
+        'zh': '天'
+    },
+    'days': {
+        'en': 'Days',
+        'zh': '天'
+    },
+    'show_anomalies_only': {
+        'en': 'Show anomalies only',
+        'zh': '仅显示异常'
+    },
+    'apply_filters': {
+        'en': 'Apply Filters',
+        'zh': '应用筛选'
+    },
+    'active_deviation_alerts': {
+        'en': 'Active Deviation Alerts',
+        'zh': '活跃偏离警报'
+    },
+    'no_active_deviation_alerts': {
+        'en': 'No active deviation alerts',
+        'zh': '无活跃偏离警报'
+    },
+    'time': {
+        'en': 'Time',
+        'zh': '时间'
+    },
+    'strike': {
+        'en': 'Strike',
+        'zh': '执行价'
+    },
+    'deviation': {
+        'en': 'Deviation',
+        'zh': '偏离'
+    },
+    'type': {
+        'en': 'Type',
+        'zh': '类型'
+    },
+    'trigger': {
+        'en': 'Trigger',
+        'zh': '触发条件'
+    },
+    'action': {
+        'en': 'Action',
+        'zh': '操作'
+    },
+    'deviation_volume_premium_chart': {
+        'en': 'Deviation, Volume Change and Premium Change',
+        'zh': '偏离率、成交量变化和权利金变化'
+    },
+    'deviation_data': {
+        'en': 'Deviation Data',
+        'zh': '偏离数据'
+    },
+    'export_csv': {
+        'en': 'Export CSV',
+        'zh': '导出CSV'
+    },
+    'market_price': {
+        'en': 'Market Price',
+        'zh': '市场价'
+    },
+    'expiration': {
+        'en': 'Expiration',
+        'zh': '到期日'
+    },
+    'volume': {
+        'en': 'Volume',
+        'zh': '成交量'
+    },
+    'volume_change': {
+        'en': 'Volume Change',
+        'zh': '成交量变化'
+    },
+    'premium': {
+        'en': 'Premium',
+        'zh': '权利金'
+    },
+    'premium_change': {
+        'en': 'Premium Change',
+        'zh': '权利金变化'
+    },
+    'market_change': {
+        'en': 'Market Change',
+        'zh': '市场价变化'
+    },
+    'status': {
+        'en': 'Status',
+        'zh': '状态'
+    },
+    'normal': {
+        'en': 'Normal',
+        'zh': '正常'
     }
 }
