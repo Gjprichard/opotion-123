@@ -815,9 +815,13 @@ const ChartUtils = {
     createExchangeComparisonCharts(data) {
         if (!data || !Array.isArray(data) || data.length === 0) return;
         
+        // 这个函数目前从期权偏离数据中创建图表，这些数据通常只包含一个交易所
+        // 为了显示多交易所数据，我们创建一个简化版的只显示当前交易所数据的图表
         this.createPCRComparisonChart(data);
         this.createVolumeDistributionChart(data);
         this.createPremiumSpreadChart(data);
+        
+        // 注意：完整的多交易所对比在VolumeAnalysisModule中处理
     },
 
     /**
@@ -1830,6 +1834,163 @@ const VolumeAnalysisModule = {
         
         // 更新交易所比较面板
         this.updateExchangeComparisonPanel(data);
+        
+        // 创建多交易所比较图表
+        this.createExchangeComparisonCharts(data);
+    },
+    
+    /**
+     * 创建多交易所对比图表
+     * @param {Object} data - 包含exchange_data的多交易所数据
+     */
+    createExchangeComparisonCharts(data) {
+        if (!data || !data.exchange_data) return;
+        
+        // 创建看跌/看涨比率对比图
+        this.createPCRComparisonChart(data.exchange_data);
+        
+        // 创建成交量分布图
+        this.createVolumeDistributionChart(data.exchange_data);
+    },
+    
+    /**
+     * 创建看跌/看涨比率对比图表（使用多交易所数据）
+     * @param {Object} exchangeData - 多交易所数据对象
+     */
+    createPCRComparisonChart(exchangeData) {
+        const ctx = document.getElementById('pcr-comparison-chart');
+        if (!ctx || !exchangeData) return;
+        
+        try {
+            // 准备数据
+            const exchanges = Object.keys(exchangeData);
+            const pcrData = exchanges.map(exchange => {
+                const data = exchangeData[exchange];
+                return {
+                    exchange: exchange.charAt(0).toUpperCase() + exchange.slice(1),
+                    pcr: data.ratio || 0
+                };
+            });
+            
+            // 销毁现有图表
+            if (this.pcrComparisonChart) {
+                this.pcrComparisonChart.destroy();
+            }
+            
+            // 创建图表
+            this.pcrComparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: pcrData.map(item => item.exchange),
+                    datasets: [{
+                        label: '看跌/看涨比率',
+                        data: pcrData.map(item => item.pcr),
+                        backgroundColor: [
+                            'rgba(54, 162, 235, 0.6)',
+                            'rgba(255, 99, 132, 0.6)',
+                            'rgba(255, 206, 86, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(255, 206, 86, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '看跌/看涨比率'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `比率: ${DataUtils.formatNumber(context.raw, 2, 'N/A')}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('创建看跌/看涨比率对比图表出错:', e);
+        }
+    },
+    
+    /**
+     * 创建成交量分布图表（使用多交易所数据）
+     * @param {Object} exchangeData - 多交易所数据对象
+     */
+    createVolumeDistributionChart(exchangeData) {
+        const ctx = document.getElementById('volume-distribution-chart');
+        if (!ctx || !exchangeData) return;
+        
+        try {
+            // 准备数据
+            const exchanges = Object.keys(exchangeData);
+            const volumeData = exchanges.map(exchange => {
+                const data = exchangeData[exchange];
+                return {
+                    exchange: exchange.charAt(0).toUpperCase() + exchange.slice(1),
+                    volume: (data.call_volume || 0) + (data.put_volume || 0)
+                };
+            });
+            
+            // 销毁现有图表
+            if (this.volumeDistributionChart) {
+                this.volumeDistributionChart.destroy();
+            }
+            
+            // 创建图表
+            this.volumeDistributionChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: volumeData.map(item => item.exchange),
+                    datasets: [{
+                        label: '成交量分布',
+                        data: volumeData.map(item => item.volume),
+                        backgroundColor: [
+                            'rgba(54, 162, 235, 0.6)',
+                            'rgba(255, 99, 132, 0.6)',
+                            'rgba(255, 206, 86, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(255, 206, 86, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const total = context.dataset.data.reduce((sum, val) => sum + (Number(val) || 0), 0);
+                                    const percentage = total > 0 ? ((value / total) * 100) : 0;
+                                    return `成交量: ${value} (${DataUtils.formatNumber(percentage, 2, '0')}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('创建成交量分布图表出错:', e);
+        }
     },
     
     /**
