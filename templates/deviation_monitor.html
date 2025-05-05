@@ -27,6 +27,26 @@
                         </select>
                     </div>
                     
+                    <!-- Exchange -->
+                    <div class="col-md-2 mb-2">
+                        <label for="exchange-filter" class="form-label">{{ t('exchange') }}</label>
+                        <select class="form-select" id="exchange-filter">
+                            <option value="deribit" selected>Deribit</option>
+                            <option value="binance" {% if exchange == 'binance' %}selected{% endif %}>Binance</option>
+                            <option value="okx" {% if exchange == 'okx' %}selected{% endif %}>OKX</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Option Type -->
+                    <div class="col-md-2 mb-2">
+                        <label for="option-type-filter" class="form-label">{{ t('option_type') }}</label>
+                        <select class="form-select" id="option-type-filter">
+                            <option value="" {% if not option_type %}selected{% endif %}>{{ t('all') }}</option>
+                            <option value="call" {% if option_type == 'call' %}selected{% endif %}>Call</option>
+                            <option value="put" {% if option_type == 'put' %}selected{% endif %}>Put</option>
+                        </select>
+                    </div>
+                    
                     <!-- Time Period -->
                     <div class="col-md-2 mb-2">
                         <label for="time-period-filter" class="form-label">{{ t('time_period') }}</label>
@@ -49,9 +69,20 @@
                         </select>
                     </div>
                     
+                    <!-- Volume Change Filter -->
+                    <div class="col-md-2 mb-2">
+                        <label for="volume-change-filter" class="form-label">{{ t('volume_change_min') }}</label>
+                        <select class="form-select" id="volume-change-filter">
+                            <option value="0" {% if volume_change_filter == 0 %}selected{% endif %}>{{ t('all') }}</option>
+                            <option value="20" {% if volume_change_filter == 20 %}selected{% endif %}>≥ 20%</option>
+                            <option value="50" {% if volume_change_filter == 50 %}selected{% endif %}>≥ 50%</option>
+                            <option value="100" {% if volume_change_filter == 100 %}selected{% endif %}>≥ 100%</option>
+                        </select>
+                    </div>
+                    
                     <!-- Show anomalies only -->
-                    <div class="col-md-3 mb-2">
-                        <div class="form-check mt-4">
+                    <div class="col-md-6 mb-2 mt-2">
+                        <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="anomaly-only-filter" {% if anomaly_only %}checked{% endif %}>
                             <label class="form-check-label" for="anomaly-only-filter">
                                 {{ t('show_anomalies_only') }}
@@ -60,7 +91,7 @@
                     </div>
                     
                     <!-- Apply Filters Button -->
-                    <div class="col-md-3 mb-2 text-end">
+                    <div class="col-md-6 mb-2 text-end">
                         <button type="button" class="btn btn-primary" id="apply-filters-btn">
                             {{ t('apply_filters') }}
                         </button>
@@ -168,9 +199,10 @@
                             <tr>
                                 <th>{{ t('time') }}</th>
                                 <th>{{ t('symbol') }}</th>
+                                <th>{{ t('exchange') }}</th>
                                 <th>{{ t('strike') }}</th>
                                 <th>{{ t('deviation') }}</th>
-                                <th>{{ t('type') }}</th>
+                                <th>{{ t('option_type') }}</th>
                                 <th>{{ t('trigger') }}</th>
                                 <th>{{ t('action') }}</th>
                             </tr>
@@ -180,13 +212,10 @@
                             <tr data-alert-id="{{ alert.id }}">
                                 <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
                                 <td>{{ alert.symbol }}</td>
+                                <td>{{ alert.exchange }}</td>
                                 <td>{{ alert.strike_price }}</td>
                                 <td>{{ alert.deviation_percent|round(2) }}%</td>
-                                <td>
-                                    <span class="badge bg-{{ 'info' if alert.alert_type == 'attention' else ('warning' if alert.alert_type == 'warning' else 'danger') }}">
-                                        {{ alert.alert_type.capitalize() }}
-                                    </span>
-                                </td>
+                                <td>{{ alert.option_type.upper() if alert.option_type else '-' }}</td>
                                 <td>{{ alert.trigger_condition }}</td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-secondary acknowledge-alert" data-alert-id="{{ alert.id }}">
@@ -241,10 +270,12 @@
                         <thead>
                             <tr>
                                 <th>{{ t('time') }}</th>
+                                <th>{{ t('symbol') }}</th>
+                                <th>{{ t('exchange') }}</th>
                                 <th>{{ t('strike') }}</th>
                                 <th>{{ t('market_price') }}</th>
                                 <th>{{ t('deviation') }}</th>
-                                <th>{{ t('type') }}</th>
+                                <th>{{ t('option_type') }}</th>
                                 <th>{{ t('expiration') }}</th>
                                 <th>{{ t('volume') }}</th>
                                 <th>{{ t('volume_change') }}</th>
@@ -258,6 +289,8 @@
                             {% for dev in deviations %}
                             <tr {% if dev.is_anomaly %}class="table-{{ 'info' if dev.anomaly_level == 'attention' else ('warning' if dev.anomaly_level == 'warning' else 'danger') }}"{% endif %}>
                                 <td>{{ dev.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ dev.symbol }}</td>
+                                <td>{{ dev.exchange }}</td>
                                 <td>{{ dev.strike_price }}</td>
                                 <td>{{ dev.market_price }}</td>
                                 <td>{{ dev.deviation_percent|round(2) }}%</td>
@@ -321,12 +354,30 @@
     
     function applyFilters() {
         const symbol = document.getElementById('symbol-filter').value;
+        const exchange = document.getElementById('exchange-filter').value;
+        const optionType = document.getElementById('option-type-filter').value;
         const timePeriod = document.getElementById('time-period-filter').value;
         const days = document.getElementById('days-filter').value;
+        const volumeChangeMin = document.getElementById('volume-change-filter').value;
         const anomalyOnly = document.getElementById('anomaly-only-filter').checked;
         
-        // Redirect to the filtered view
-        window.location.href = `/deviation-monitor?symbol=${symbol}&time_period=${timePeriod}&days=${days}&anomaly_only=${anomalyOnly}`;
+        // 构建URL参数
+        let params = new URLSearchParams({
+            symbol: symbol,
+            exchange: exchange,
+            time_period: timePeriod,
+            days: days,
+            anomaly_only: anomalyOnly,
+            volume_change_min: volumeChangeMin
+        });
+        
+        // 仅当选择了特定期权类型时添加参数
+        if (optionType) {
+            params.append('option_type', optionType);
+        }
+        
+        // 重定向到带过滤器的视图
+        window.location.href = `/deviation-monitor?${params.toString()}`;
     }
     
     function refreshData() {
@@ -474,12 +525,30 @@
     
     async function fetchDeviationData(showToastOnSuccess = false) {
         const symbol = document.getElementById('symbol-filter').value;
+        const exchange = document.getElementById('exchange-filter').value;
+        const optionType = document.getElementById('option-type-filter').value;
         const timePeriod = document.getElementById('time-period-filter').value;
         const days = document.getElementById('days-filter').value;
+        const volumeChangeMin = document.getElementById('volume-change-filter').value;
         const anomalyOnly = document.getElementById('anomaly-only-filter').checked;
         
+        // 构建URL参数
+        let params = new URLSearchParams({
+            symbol: symbol,
+            exchange: exchange,
+            time_period: timePeriod,
+            days: days,
+            anomaly_only: anomalyOnly,
+            volume_change_min: volumeChangeMin
+        });
+        
+        // 仅当选择了特定期权类型时添加参数
+        if (optionType) {
+            params.append('option_type', optionType);
+        }
+        
         try {
-            const response = await fetch(`/api/deviation/data?symbol=${symbol}&time_period=${timePeriod}&days=${days}&anomaly_only=${anomalyOnly}`);
+            const response = await fetch(`/api/deviation/data?${params.toString()}`);
             const data = await response.json();
             
             if (response.ok) {
@@ -616,6 +685,8 @@
             
             row.innerHTML = `
                 <td>${item.timestamp}</td>
+                <td>${item.symbol}</td>
+                <td>${item.exchange}</td>
                 <td>${item.strike_price}</td>
                 <td>${item.market_price}</td>
                 <td>${item.deviation_percent.toFixed(2)}%</td>
@@ -690,7 +761,7 @@
         
         // Define CSV headers
         const headers = [
-            'Timestamp', 'Symbol', 'Strike Price', 'Market Price', 'Deviation %', 
+            'Timestamp', 'Symbol', 'Exchange', 'Strike Price', 'Market Price', 'Deviation %', 
             'Option Type', 'Expiration Date', 'Volume', 'Volume Change %', 
             'Premium', 'Premium Change %', 'Market Price Change %', 'Is Anomaly', 'Anomaly Level'
         ];
@@ -702,6 +773,7 @@
             const row = [
                 item.timestamp,
                 item.symbol,
+                item.exchange,
                 item.strike_price,
                 item.market_price,
                 item.deviation_percent,
