@@ -18,6 +18,17 @@
             <div class="card-body">
                 <form id="threshold-form">
                     <div class="mb-3">
+                        <label for="time-period-select" class="form-label">{{ t('time_period') }}</label>
+                        <select class="form-select" id="time-period-select">
+                            {% for period_key, period_info in time_periods.items() %}
+                            <option value="{{ period_key }}" {% if period_key == current_time_period %}selected{% endif %}>
+                                {{ period_info.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
                         <label for="indicator-select" class="form-label">Indicator</label>
                         <select class="form-select" id="indicator-select">
                             {% for indicator, levels in default_thresholds.items() %}
@@ -143,6 +154,13 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Handle time period selection change
+    const timePeriodSelect = document.getElementById('time-period-select');
+    timePeriodSelect.addEventListener('change', function() {
+        // Navigate to the alerts page with the selected time period
+        window.location.href = `/alerts?time_period=${this.value}`;
+    });
+
     // Handle indicator selection change
     const indicatorSelect = document.getElementById('indicator-select');
     indicatorSelect.addEventListener('change', function() {
@@ -174,6 +192,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Get the selected time period
+        const timePeriod = document.getElementById('time-period-select').value;
+        
         // Save the thresholds
         fetch('/api/alerts/threshold', {
             method: 'POST',
@@ -182,6 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify({
                 indicator: selectedIndicator,
+                time_period: timePeriod,
                 attention: parseFloat(attention),
                 warning: parseFloat(warning),
                 severe: parseFloat(severe)

@@ -109,17 +109,26 @@ def dashboard_data():
 
 @app.route('/alerts')
 def alerts_view():
-    # Get all alerts, including acknowledged ones
-    all_alerts = Alert.query.order_by(Alert.timestamp.desc()).limit(100).all()
+    # 获取时间周期参数，默认为4h
+    time_period = request.args.get('time_period', '4h')
     
-    # Get current alert thresholds
-    thresholds = AlertThreshold.query.all()
+    # 确保时间周期有效
+    if time_period not in Config.TIME_PERIODS:
+        time_period = '4h'
+    
+    # Get all alerts, including acknowledged ones (filtered by time_period)
+    all_alerts = Alert.query.filter_by(time_period=time_period).order_by(Alert.timestamp.desc()).limit(100).all()
+    
+    # Get current alert thresholds for this time period
+    thresholds = AlertThreshold.query.filter_by(time_period=time_period).all()
     threshold_dict = {t.indicator: t for t in thresholds}
     
     return render_template('alerts.html', 
                            alerts=all_alerts, 
                            thresholds=threshold_dict,
-                           default_thresholds=Config.DEFAULT_ALERT_THRESHOLDS)
+                           default_thresholds=Config.DEFAULT_ALERT_THRESHOLDS,
+                           time_periods=Config.TIME_PERIODS,
+                           current_time_period=time_period)
 
 @app.route('/api/alerts/acknowledge', methods=['POST'])
 def acknowledge_alert_api():
