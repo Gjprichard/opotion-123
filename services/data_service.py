@@ -18,7 +18,30 @@ def fetch_latest_option_data(symbol):
     try:
         logger.info(f"Fetching latest option data for {symbol} from Deribit API")
         
+        # 检查是否应该使用实时数据
+        from app import db
+        from models import SystemSetting, ApiCredential
+        
+        use_real_data_setting = SystemSetting.query.filter_by(setting_name='use_real_data').first()
+        use_real_data = use_real_data_setting.get_typed_value() if use_real_data_setting else False
+        
+        # 如果不使用实时数据，直接使用模拟数据
+        if not use_real_data:
+            logger.info(f"Real data is disabled, using simulation for {symbol}")
+            return fallback_option_data(symbol)
+        
+        # 检查是否有有效的API凭证
+        api_credential = ApiCredential.query.filter_by(api_name='deribit', is_active=True).first()
+        if not api_credential:
+            logger.warning(f"No active API credentials found for Deribit, using fallback data for {symbol}")
+            return fallback_option_data(symbol)
+        
+        # 设置API凭证
+        from services.exchange_api import set_api_credentials
+        set_api_credentials(api_credential.api_key, api_credential.api_secret)
+        
         # 从Deribit API获取当前的期权市场数据
+        from services.exchange_api import get_option_market_data
         option_data_list = get_option_market_data(symbol)
         
         if not option_data_list:

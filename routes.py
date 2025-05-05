@@ -9,6 +9,7 @@ from services.data_service import fetch_latest_option_data, fetch_historical_dat
 from services.risk_calculator import calculate_risk_indicators, run_scenario_analysis
 from services.alert_service import get_active_alerts, acknowledge_alert, update_alert_threshold
 from services.deviation_monitor_service import calculate_deviation_metrics, get_deviation_data, get_deviation_alerts, acknowledge_deviation_alert
+from services.exchange_api import set_api_credentials, get_underlying_price
 from translations import translations
 
 @app.route('/')
@@ -321,11 +322,21 @@ def settings():
     thresholds = AlertThreshold.query.filter_by(time_period=time_period).all()
     threshold_dict = {t.indicator: t for t in thresholds}
     
+    # 获取API凭证（如果存在）
+    api_credentials = ApiCredential.query.filter_by(api_name='deribit', is_active=True).first()
+    
+    # 检查是否启用实时数据
+    use_real_data_setting = SystemSetting.query.filter_by(setting_name='use_real_data').first()
+    use_real_data = use_real_data_setting.get_typed_value() if use_real_data_setting else False
+    
     return render_template('settings.html', 
                            thresholds=threshold_dict,
                            default_thresholds=Config.DEFAULT_ALERT_THRESHOLDS,
                            time_periods=Config.TIME_PERIODS,
-                           current_time_period=time_period)
+                           current_time_period=time_period,
+                           api_credentials=api_credentials,
+                           use_real_data=use_real_data,
+                           config=Config)
 
 @app.route('/api/data/refresh', methods=['POST'])
 def refresh_data():
@@ -508,6 +519,104 @@ def set_language(lang):
         session['language'] = lang
         return redirect(request.referrer or url_for('dashboard'))
     return redirect(url_for('dashboard'))
+
+@app.route('/api/settings/api', methods=['POST'])
+def save_api_settings():
+    """保存API设置"""
+    try:
+        api_key = request.json.get('api_key', '')
+        api_secret = request.json.get('api_secret', '')
+        use_real_data = request.json.get('use_real_data', False)
+        
+        # 保存Deribit API凭证
+        if api_key and api_secret:
+            # 查询现有凭证
+            api_credential = ApiCredential.query.filter_by(api_name='deribit').first()
+            
+            if api_credential:
+                # 更新现有凭证
+                api_credential.api_key = api_key
+                api_credential.api_secret = api_secret
+                api_credential.is_active = True
+            else:
+                # 创建新凭证
+                api_credential = ApiCredential(
+                    api_name='deribit',
+                    api_key=api_key,
+                    api_secret=api_secret,
+                    is_active=True
+                )
+                db.session.add(api_credential)
+            
+            # 将凭证应用到API客户端
+            set_api_credentials(api_key, api_secret)
+        
+        # 保存是否使用实时数据设置
+        use_real_data_setting = SystemSetting.query.filter_by(setting_name='use_real_data').first()
+        if use_real_data_setting:
+            use_real_data_setting.setting_value = 'true' if use_real_data else 'false'
+        else:
+            use_real_data_setting = SystemSetting(
+                setting_name='use_real_data',
+                setting_value='true' if use_real_data else 'false',
+                setting_type='boolean',
+                description='Whether to use real market data from API instead of simulation'
+            )
+            db.session.add(use_real_data_setting)
+        
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.error(f"Error saving API settings: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error saving API settings: {str(e)}'
+        }), 500
+
+@app.route('/api/settings/test-api', methods=['POST'])
+def test_api_connection():
+    """测试API连接"""
+    try:
+        api_key = request.json.get('api_key', '')
+        api_secret = request.json.get('api_secret', '')
+        
+        if not api_key or not api_secret:
+            return jsonify({
+                'success': False,
+                'message': 'API key and secret are required'
+            }), 400
+        
+        # 暂时设置API凭证用于测试
+        set_api_credentials(api_key, api_secret)
+        
+        # 测试获取BTC价格
+        btc_price = get_underlying_price('BTC')
+        if not btc_price:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to get BTC price. API connection failed.'
+            }), 400
+        
+        # 测试获取ETH价格
+        eth_price = get_underlying_price('ETH')
+        if not eth_price:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to get ETH price. API connection failed.'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'message': f'Connection successful! BTC: ${btc_price:.2f}, ETH: ${eth_price:.2f}'
+        })
+    except Exception as e:
+        app.logger.error(f"Error testing API connection: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'Error testing API connection: {str(e)}'
+        }), 500
 
 @app.context_processor
 def inject_language():
