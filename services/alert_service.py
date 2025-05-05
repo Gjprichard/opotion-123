@@ -10,22 +10,37 @@ logger = logging.getLogger(__name__)
 def check_alert_thresholds(risk_indicator):
     """
     Check if any risk thresholds are crossed and generate alerts
+    根据风险指标的时间周期选择对应的阈值
     """
     try:
-        logger.info(f"Checking alert thresholds for {risk_indicator.symbol}")
+        logger.info(f"Checking alert thresholds for {risk_indicator.symbol} ({risk_indicator.time_period})")
         
         # Get or create alert thresholds
         thresholds = {}
-        for indicator_name, levels in Config.DEFAULT_ALERT_THRESHOLDS.items():
-            threshold = AlertThreshold.query.filter_by(indicator=indicator_name).first()
+        time_period = risk_indicator.time_period
+        
+        # 确保时间周期有效
+        if time_period not in Config.TIME_PERIODS:
+            time_period = '4h'  # 默认使用4小时
+            
+        for indicator_name, periods in Config.DEFAULT_ALERT_THRESHOLDS.items():
+            # 获取该指标在当前时间周期的阈值
+            threshold = AlertThreshold.query.filter_by(
+                indicator=indicator_name,
+                time_period=time_period
+            ).first()
             
             if not threshold:
-                # Create with default values
+                # 从配置中获取默认值
+                default_levels = periods.get(time_period, periods.get('4h'))
+                
+                # 创建新的阈值设置
                 threshold = AlertThreshold(
                     indicator=indicator_name,
-                    attention_threshold=levels['attention'],
-                    warning_threshold=levels['warning'],
-                    severe_threshold=levels['severe'],
+                    time_period=time_period,
+                    attention_threshold=default_levels['attention'],
+                    warning_threshold=default_levels['warning'],
+                    severe_threshold=default_levels['severe'],
                     is_enabled=True
                 )
                 db.session.add(threshold)
@@ -100,12 +115,13 @@ def check_individual_threshold(symbol, indicator_name, current_value, threshold)
     
     if alert_type:
         # Create alert message
-        message = f"{symbol} {indicator_name.capitalize()} crossed {alert_type} threshold ({threshold_value:.2f})"
+        message = f"{symbol} {indicator_name.capitalize()} ({threshold.time_period}) crossed {alert_type} threshold ({threshold_value:.2f})"
         
         # Check if a similar alert already exists (avoid duplicates)
         existing_alert = Alert.query.filter_by(
             symbol=symbol,
             indicator=indicator_name,
+            time_period=threshold.time_period,
             alert_type=alert_type,
             is_acknowledged=False
         ).first()
@@ -115,6 +131,7 @@ def check_individual_threshold(symbol, indicator_name, current_value, threshold)
             alert = Alert(
                 symbol=symbol,
                 timestamp=datetime.utcnow(),
+                time_period=threshold.time_period,
                 alert_type=alert_type,
                 message=message,
                 indicator=indicator_name,
@@ -161,17 +178,21 @@ def acknowledge_alert(alert_id):
         db.session.rollback()
         return False
 
-def update_alert_threshold(indicator, attention, warning, severe):
+def update_alert_threshold(indicator, time_period, attention, warning, severe):
     """
-    Update alert threshold values
+    Update alert threshold values for specific indicator and time period
     """
     try:
-        threshold = AlertThreshold.query.filter_by(indicator=indicator).first()
+        threshold = AlertThreshold.query.filter_by(
+            indicator=indicator,
+            time_period=time_period
+        ).first()
         
         if not threshold:
             # Create new threshold
             threshold = AlertThreshold(
                 indicator=indicator,
+                time_period=time_period,
                 attention_threshold=attention,
                 warning_threshold=warning,
                 severe_threshold=severe,
@@ -185,10 +206,27 @@ def update_alert_threshold(indicator, attention, warning, severe):
             threshold.severe_threshold = severe
         
         db.session.commit()
-        logger.info(f"Updated thresholds for {indicator}")
+        logger.info(f"Updated thresholds for {indicator} ({time_period})")
         return True
             
     except Exception as e:
         logger.error(f"Error updating threshold: {str(e)}")
         db.session.rollback()
         return False
+        
+def get_alert_thresholds_by_period(indicator=None, time_period='4h'):
+    """
+    获取指定时间周期的所有阈值设置
+    如果指定了indicator，则只返回该指标的阈值
+    """
+    try:
+        query = AlertThreshold.query.filter_by(time_period=time_period)
+        
+        if indicator:
+            query = query.filter_by(indicator=indicator)
+            
+        return query.all()
+        
+    except Exception as e:
+        logger.error(f"Error getting alert thresholds: {str(e)}")
+        return []

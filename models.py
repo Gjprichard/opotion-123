@@ -27,6 +27,7 @@ class RiskIndicator(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     symbol = db.Column(db.String(20), nullable=False, index=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    time_period = db.Column(db.String(10), default='4h', nullable=False, index=True)  # 新增: '15m', '1h', '4h', '1d', '7d', '30d'
     volaxivity = db.Column(db.Float, nullable=True)  # Custom volatility index
     volatility_skew = db.Column(db.Float, nullable=True)
     put_call_ratio = db.Column(db.Float, nullable=True)
@@ -38,13 +39,14 @@ class RiskIndicator(db.Model):
     liquidation_risk = db.Column(db.Float, nullable=True)  # Risk of cascading liquidations (crypto-specific) 
     
     def __repr__(self):
-        return f'<RiskIndicator {self.symbol} {self.timestamp}>'
+        return f'<RiskIndicator {self.symbol} {self.time_period} {self.timestamp}>'
 
 class Alert(db.Model):
     """Model to store generated alerts"""
     id = db.Column(db.Integer, primary_key=True)
     symbol = db.Column(db.String(20), nullable=False, index=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    time_period = db.Column(db.String(10), default='4h', nullable=False)  # 新增时间周期
     alert_type = db.Column(db.String(20), nullable=False)  # 'attention', 'warning', 'severe'
     message = db.Column(db.Text, nullable=False)
     indicator = db.Column(db.String(50), nullable=False)  # Which indicator triggered the alert
@@ -53,19 +55,22 @@ class Alert(db.Model):
     is_acknowledged = db.Column(db.Boolean, default=False)
     
     def __repr__(self):
-        return f'<Alert {self.symbol} {self.alert_type} {self.timestamp}>'
+        return f'<Alert {self.symbol} {self.alert_type} {self.time_period} {self.timestamp}>'
 
 class AlertThreshold(db.Model):
     """Model to store alert threshold settings"""
     id = db.Column(db.Integer, primary_key=True)
-    indicator = db.Column(db.String(50), nullable=False, unique=True)
+    indicator = db.Column(db.String(50), nullable=False)
+    time_period = db.Column(db.String(10), default='4h', nullable=False)  # 新增时间周期
     attention_threshold = db.Column(db.Float, nullable=False)
     warning_threshold = db.Column(db.Float, nullable=False)
     severe_threshold = db.Column(db.Float, nullable=False)
     is_enabled = db.Column(db.Boolean, default=True)
     
+    __table_args__ = (db.UniqueConstraint('indicator', 'time_period'),)  # 复合唯一约束
+    
     def __repr__(self):
-        return f'<AlertThreshold {self.indicator}>'
+        return f'<AlertThreshold {self.indicator} {self.time_period}>'
 
 class ScenarioAnalysis(db.Model):
     """Model to store scenario analysis results"""
