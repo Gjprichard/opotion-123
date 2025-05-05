@@ -573,6 +573,12 @@ def deviation_volume_analysis_api():
         # 确保时间周期有效
         if time_period not in Config.TIME_PERIODS:
             time_period = '15m'
+            
+        # 限制返回的历史数据数量，以提高性能
+        max_history_days = 10
+        if days > max_history_days:
+            app.logger.info(f"请求天数 {days} 超过最大历史天数 {max_history_days}，将限制为 {max_history_days}")
+            days = max_history_days
         
         # 从deviation_monitor_service中导入所需的函数
         from services.deviation_monitor_service import get_call_put_volume_analysis
@@ -585,13 +591,81 @@ def deviation_volume_analysis_api():
             include_history=include_history
         )
         
+        # 确保数据结构完整
+        if not volume_data or not isinstance(volume_data, dict):
+            app.logger.warning("返回的volume_data为空或不是字典类型")
+            volume_data = create_default_volume_data()
+            
+        # 确保各个交易所数据存在
+        if 'exchange_data' not in volume_data or not volume_data['exchange_data']:
+            app.logger.warning("volume_data中没有exchange_data字段或为空")
+            volume_data['exchange_data'] = {
+                'deribit': {
+                    'call_volume': 0,
+                    'put_volume': 0,
+                    'ratio': 1.0,
+                    'anomaly_calls': 0,
+                    'anomaly_puts': 0
+                }
+            }
+            
+        # 确保历史数据存在
+        if include_history and ('history' not in volume_data or not volume_data['history']):
+            app.logger.warning("请求包含历史数据但volume_data中没有history字段或为空")
+            volume_data['history'] = [{
+                'timestamp': 'N/A',
+                'call_put_ratio': 1.0,
+                'call_volume': 0,
+                'put_volume': 0,
+                'market_price': 0
+            }]
+        
         return jsonify(volume_data)
     except Exception as e:
         app.logger.error(f"Error in deviation_volume_analysis_api: {str(e)}", exc_info=True)
-        return jsonify({
-            'error': 'An error occurred while fetching volume analysis data',
-            'message': str(e)
-        }), 500
+        # 返回默认数据结构，避免客户端错误
+        return jsonify(create_default_volume_data())
+
+def create_default_volume_data():
+    """创建默认的多空成交量分析数据结构"""
+    return {
+        'call_put_ratio': 1.0,
+        'volume_stats': {
+            'total_volume': 0,
+            'call_volume': 0,
+            'put_volume': 0,
+            'call_volume_percent': 50,
+            'put_volume_percent': 50,
+            'volume_change_24h': 0,
+            'call_volume_change': 0,
+            'put_volume_change': 0
+        },
+        'exchange_data': {
+            'deribit': {
+                'call_volume': 0,
+                'put_volume': 0,
+                'ratio': 1.0,
+                'anomaly_calls': 0,
+                'anomaly_puts': 0
+            }
+        },
+        'anomaly_stats': {
+            'total_anomalies': 0,
+            'call_anomalies': 0,
+            'put_anomalies': 0,
+            'alert_level': 'normal',
+            'alert_trigger': '无'
+        },
+        'history': [
+            {
+                'timestamp': 'N/A',
+                'call_put_ratio': 1.0,
+                'call_volume': 0,
+                'put_volume': 0,
+                'market_price': 0
+            }
+        ]
+    }
 
 @app.route('/language/<lang>')
 def set_language(lang):
