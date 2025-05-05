@@ -602,9 +602,20 @@
             const data = await response.json();
             
             if (response.ok) {
+                // 如果设置了成交量变化筛选器，确保在前端再次进行筛选
+                let filteredData = data;
+                if (volumeChangeMin > 0) {
+                    // 仅保留成交量变化百分比不为空且大于等于指定值的数据
+                    filteredData = data.filter(item => 
+                        item.volume_change_percent !== null && 
+                        item.volume_change_percent >= volumeChangeMin
+                    );
+                    console.log(`Applied volume change filter: ${volumeChangeMin}%, found ${filteredData.length} matching records out of ${data.length}`);
+                }
+                
                 // 限制处理的数据量以提高性能
-                const limitedData = data.length > 500 ? data.slice(0, 500) : data;
-                deviationData = data; // 保存完整数据用于导出
+                const limitedData = filteredData.length > 500 ? filteredData.slice(0, 500) : filteredData;
+                deviationData = filteredData; // 保存筛选后的数据用于导出
                 
                 // 使用 requestAnimationFrame 来优化渲染性能
                 requestAnimationFrame(() => {

@@ -274,7 +274,11 @@ def get_deviation_data(symbol=None, time_period='4h', is_anomaly=None, days=7, e
         query = query.filter(StrikeDeviationMonitor.option_type == option_type)
         
     if volume_change_min is not None and volume_change_min > 0:
-        query = query.filter(StrikeDeviationMonitor.volume_change_percent >= volume_change_min)
+        # 确保只返回volume_change_percent非null且大于等于指定值的记录
+        query = query.filter(
+            StrikeDeviationMonitor.volume_change_percent.isnot(None),
+            StrikeDeviationMonitor.volume_change_percent >= volume_change_min
+        )
     
     # 按时间降序排序
     deviations = query.order_by(StrikeDeviationMonitor.timestamp.desc()).all()
