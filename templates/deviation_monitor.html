@@ -184,6 +184,56 @@
     </div>
 </div>
 
+<!-- Exchange Comparison Cards -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">{{ t('exchange_comparison') }}</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Put/Call Ratio Comparison -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card border-left-info shadow h-100">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold text-info">{{ t('put_call_ratio_comparison') }}</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="pcr-comparison-chart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Volume Distribution -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card border-left-primary shadow h-100">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold text-primary">{{ t('volume_distribution') }}</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="volume-distribution-chart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Premium Spread -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card border-left-success shadow h-100">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold text-success">{{ t('premium_spread') }}</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="premium-spread-chart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Active Alerts Card -->
 <div class="row mb-4">
     <div class="col-12">
@@ -555,6 +605,7 @@
                 deviationData = data;
                 createDeviationChart(data);
                 updateDeviationTable(data);
+                createExchangeComparisonCharts(data);
                 
                 if (showToastOnSuccess) {
                     showToast('Data refreshed successfully', 'success');
@@ -808,6 +859,232 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+    
+    // 创建交易所比较图表
+    function createExchangeComparisonCharts(data) {
+        // 为每个交易所收集相关数据
+        const exchanges = [...new Set(data.map(item => item.exchange))];
+        if (exchanges.length <= 1) {
+            // 如果只有一个交易所，显示提示信息
+            document.querySelectorAll('#pcr-comparison-chart, #volume-distribution-chart, #premium-spread-chart').forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#666';
+                ctx.fillText('至少需要两个交易所的数据来进行比较', canvas.width / 2, canvas.height / 2);
+            });
+            return;
+        }
+
+        // 1. Put/Call Ratio 比较图表
+        createPutCallRatioComparisonChart(data, exchanges);
+        
+        // 2. 成交量分布图表
+        createVolumeDistributionChart(data, exchanges);
+        
+        // 3. 期权溢价差异图表
+        createPremiumSpreadChart(data, exchanges);
+    }
+    
+    // 创建看跌/看涨比率比较图表
+    function createPutCallRatioComparisonChart(data, exchanges) {
+        const ctx = document.getElementById('pcr-comparison-chart').getContext('2d');
+        
+        // 计算每个交易所的看跌/看涨比率
+        const pcrData = {};
+        exchanges.forEach(exchange => {
+            const exchangeData = data.filter(item => item.exchange === exchange);
+            const calls = exchangeData.filter(item => item.option_type.toLowerCase() === 'call');
+            const puts = exchangeData.filter(item => item.option_type.toLowerCase() === 'put');
+            
+            // 使用成交量作为权重
+            const callVolume = calls.reduce((sum, item) => sum + item.volume, 0);
+            const putVolume = puts.reduce((sum, item) => sum + item.volume, 0);
+            
+            const ratio = callVolume > 0 ? putVolume / callVolume : 0;
+            pcrData[exchange] = parseFloat(ratio.toFixed(2));
+        });
+        
+        // 创建图表
+        if (window.pcrComparisonChart) {
+            window.pcrComparisonChart.destroy();
+        }
+        
+        window.pcrComparisonChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: exchanges,
+                datasets: [{
+                    label: '看跌/看涨比率',
+                    data: exchanges.map(exchange => pcrData[exchange]),
+                    backgroundColor: [
+                        'rgba(78, 115, 223, 0.7)',
+                        'rgba(28, 200, 138, 0.7)',
+                        'rgba(246, 194, 62, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(78, 115, 223, 1)',
+                        'rgba(28, 200, 138, 1)',
+                        'rgba(246, 194, 62, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '比率'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `比率: ${context.raw}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // 创建成交量分布图表
+    function createVolumeDistributionChart(data, exchanges) {
+        const ctx = document.getElementById('volume-distribution-chart').getContext('2d');
+        
+        // 计算每个交易所的总成交量
+        const volumeData = {};
+        let totalVolume = 0;
+        
+        exchanges.forEach(exchange => {
+            const exchangeData = data.filter(item => item.exchange === exchange);
+            const volume = exchangeData.reduce((sum, item) => sum + item.volume, 0);
+            volumeData[exchange] = volume;
+            totalVolume += volume;
+        });
+        
+        // 计算百分比
+        exchanges.forEach(exchange => {
+            volumeData[exchange] = totalVolume > 0 ? 
+                parseFloat(((volumeData[exchange] / totalVolume) * 100).toFixed(2)) : 0;
+        });
+        
+        // 创建图表
+        if (window.volumeDistributionChart) {
+            window.volumeDistributionChart.destroy();
+        }
+        
+        window.volumeDistributionChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: exchanges,
+                datasets: [{
+                    data: exchanges.map(exchange => volumeData[exchange]),
+                    backgroundColor: [
+                        'rgba(78, 115, 223, 0.7)',
+                        'rgba(28, 200, 138, 0.7)',
+                        'rgba(246, 194, 62, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(78, 115, 223, 1)',
+                        'rgba(28, 200, 138, 1)',
+                        'rgba(246, 194, 62, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.label}: ${context.raw}% 成交量`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // 创建权利金差异图表
+    function createPremiumSpreadChart(data, exchanges) {
+        const ctx = document.getElementById('premium-spread-chart').getContext('2d');
+        
+        // 计算每个交易所的平均权利金
+        const premiumData = {};
+        exchanges.forEach(exchange => {
+            const exchangeData = data.filter(item => item.exchange === exchange);
+            if (exchangeData.length > 0) {
+                const avgPremium = exchangeData.reduce((sum, item) => sum + item.premium, 0) / exchangeData.length;
+                premiumData[exchange] = parseFloat(avgPremium.toFixed(2));
+            } else {
+                premiumData[exchange] = 0;
+            }
+        });
+        
+        // 创建图表
+        if (window.premiumSpreadChart) {
+            window.premiumSpreadChart.destroy();
+        }
+        
+        window.premiumSpreadChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: exchanges,
+                datasets: [{
+                    label: '平均权利金',
+                    data: exchanges.map(exchange => premiumData[exchange]),
+                    backgroundColor: [
+                        'rgba(78, 115, 223, 0.7)',
+                        'rgba(28, 200, 138, 0.7)',
+                        'rgba(246, 194, 62, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(78, 115, 223, 1)',
+                        'rgba(28, 200, 138, 1)',
+                        'rgba(246, 194, 62, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '平均权利金'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `平均权利金: ${context.raw}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
     
     function showToast(message, type = 'info') {
