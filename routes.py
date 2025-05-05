@@ -417,6 +417,9 @@ def deviation_data_api():
         option_type = request.args.get('option_type', '')  # 'call', 'put' 或空字符串表示所有
         volume_change_filter = float(request.args.get('volume_change_filter', 0))  # 成交量变化过滤器，默认0表示不过滤
         
+        print(f"API请求参数: symbol={symbol}, time_period={time_period}, exchange={exchange}, days={days}, "
+              f"option_type={option_type}, volume_change_filter={volume_change_filter}, anomaly_only={anomaly_only}")
+        
         # 确保时间周期有效
         if time_period not in Config.TIME_PERIODS:
             time_period = '4h'

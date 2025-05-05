@@ -50,7 +50,17 @@ function applyFilters() {
     const volumeChangeFilter = document.getElementById('volume-change-filter').value;
     const anomalyOnly = document.getElementById('anomaly-only-filter').checked;
     
-    // 构建URL参数
+    console.log('应用筛选: ', {
+        symbol, 
+        exchange, 
+        optionType, 
+        timePeriod, 
+        days, 
+        volumeChangeFilter, 
+        anomalyOnly
+    });
+    
+    // 在修改URL历史记录的同时获取数据（不重载页面）
     let params = new URLSearchParams({
         symbol: symbol,
         exchange: exchange,
@@ -65,8 +75,14 @@ function applyFilters() {
         params.append('option_type', optionType);
     }
     
-    // 重定向到带过滤器的视图
-    window.location.href = `/deviation-monitor?${params.toString()}`;
+    // 使用 history.pushState 更新 URL，但不重载页面
+    const newUrl = `/deviation-monitor?${params.toString()}`;
+    window.history.pushState({ path: newUrl }, '', newUrl);
+    
+    // 直接获取数据，不重载页面
+    fetchDeviationData(true);
+    // 同时更新风险指标
+    fetchRiskData();
 }
 
 // 刷新数据
