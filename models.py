@@ -97,6 +97,7 @@ class StrikeDeviationMonitor(db.Model):
     symbol = db.Column(db.String(20), nullable=False, index=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     time_period = db.Column(db.String(10), default='4h', nullable=False, index=True)
+    exchange = db.Column(db.String(20), default='deribit', nullable=False, index=True)  # 'deribit', 'binance', 'okx'
     strike_price = db.Column(db.Float, nullable=False)
     market_price = db.Column(db.Float, nullable=False)
     deviation_percent = db.Column(db.Float, nullable=False)  # Absolute deviation percentage
@@ -119,9 +120,11 @@ class DeviationAlert(db.Model):
     symbol = db.Column(db.String(20), nullable=False, index=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     time_period = db.Column(db.String(10), default='4h', nullable=False)
+    exchange = db.Column(db.String(20), default='deribit', nullable=False, index=True)  # 'deribit', 'binance', 'okx'
     strike_price = db.Column(db.Float, nullable=False)
     market_price = db.Column(db.Float, nullable=False)
     deviation_percent = db.Column(db.Float, nullable=False)
+    option_type = db.Column(db.String(4), nullable=True)  # 'call' or 'put'
     alert_type = db.Column(db.String(20), nullable=False)  # 'attention', 'warning', 'severe'
     message = db.Column(db.Text, nullable=False)
     trigger_condition = db.Column(db.String(100), nullable=False)  # What triggered the alert

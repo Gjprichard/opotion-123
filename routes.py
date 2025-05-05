@@ -362,6 +362,9 @@ def deviation_monitor():
     time_period = request.args.get('time_period', '4h')
     anomaly_only = request.args.get('anomaly_only', 'false').lower() == 'true'
     days = int(request.args.get('days', 7))
+    exchange = request.args.get('exchange', 'deribit')
+    option_type = request.args.get('option_type', '')  # 'call', 'put' 或空字符串表示所有
+    volume_change_filter = float(request.args.get('volume_change_filter', 0))  # 成交量变化过滤器，默认0表示不过滤
     
     # 确保时间周期有效
     if time_period not in Config.TIME_PERIODS:
@@ -372,12 +375,16 @@ def deviation_monitor():
         symbol=symbol,
         time_period=time_period,
         is_anomaly=True if anomaly_only else None,
-        days=days
+        days=days,
+        exchange=exchange,
+        option_type=option_type if option_type else None,
+        volume_change_min=volume_change_filter if volume_change_filter > 0 else None
     )
     
     # 获取未确认的偏离警报
     active_alerts = get_deviation_alerts(
         symbol=symbol,
+        exchange=exchange,
         time_period=time_period,
         acknowledged=False
     )
