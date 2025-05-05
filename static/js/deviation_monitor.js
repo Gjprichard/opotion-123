@@ -731,6 +731,47 @@ function updateStatisticsPanel(stats) {
     const statsPanelElement = document.getElementById('stats-panel');
     if (!statsPanelElement) return;
     
+    // 安全处理可能为undefined的属性
+    const safeValue = (value, defaultValue = 0) => {
+        return value !== undefined ? value : defaultValue;
+    };
+    
+    const safeToFixed = (value, digits = 2, defaultValue = '0') => {
+        return value !== undefined ? Number(value).toFixed(digits) : defaultValue;
+    };
+    
+    // 安全获取对象属性
+    const safeGet = (obj, path, defaultValue = 0) => {
+        if (!obj) return defaultValue;
+        const keys = path.split('.');
+        let current = obj;
+        for (const key of keys) {
+            if (current[key] === undefined) return defaultValue;
+            current = current[key];
+        }
+        return current;
+    };
+
+    const totalPoints = safeValue(stats.totalPoints, 0);
+    const avgDeviation = safeValue(stats.avgDeviation, 0);
+    const avgVolumeChange = safeValue(stats.avgVolumeChange, 0);
+    const putCallRatio = safeValue(stats.putCallRatio, 0);
+    const volumePutCallRatio = safeValue(stats.volumePutCallRatio, 0);
+    const putOptions = safeValue(stats.putOptions, 0);
+    const callOptions = safeValue(stats.callOptions, 0);
+    const putVolume = safeValue(stats.putVolume, 0);
+    const callVolume = safeValue(stats.callVolume, 0);
+    const anomalyPoints = safeValue(stats.anomalyPoints, 0);
+    const anomalyPercentage = safeValue(stats.anomalyPercentage, 0);
+    const attentionCount = safeValue(stats.attentionCount, 0);
+    const warningCount = safeValue(stats.warningCount, 0);
+    const severeCount = safeValue(stats.severeCount, 0);
+    
+    // 安全获取分布数据
+    const deviationRanges = stats.deviationRanges || {
+        '0-2%': 0, '2-4%': 0, '4-6%': 0, '6-8%': 0, '8-10%': 0
+    };
+    
     // 创建统计内容
     let statsHtml = `
         <div class="card mb-4">
@@ -744,23 +785,23 @@ function updateStatisticsPanel(stats) {
                         <table class="table table-sm">
                             <tr>
                                 <th>总数据点</th>
-                                <td>${stats.totalPoints}</td>
+                                <td>${totalPoints}</td>
                             </tr>
                             <tr>
                                 <th>平均偏离率</th>
-                                <td>${stats.avgDeviation.toFixed(2)}%</td>
+                                <td>${safeToFixed(avgDeviation)}%</td>
                             </tr>
                             <tr>
                                 <th>平均成交量变化</th>
-                                <td>${stats.avgVolumeChange.toFixed(2)}%</td>
+                                <td>${safeToFixed(avgVolumeChange)}%</td>
                             </tr>
                             <tr>
                                 <th>看跌/看涨比例(数量)</th>
-                                <td>${stats.putCallRatio.toFixed(2)} (${stats.putOptions}/${stats.callOptions})</td>
+                                <td>${safeToFixed(putCallRatio)} (${putOptions}/${callOptions})</td>
                             </tr>
                             <tr>
                                 <th>看跌/看涨比例(成交量)</th>
-                                <td>${stats.volumePutCallRatio.toFixed(2)} (${stats.putVolume}/${stats.callVolume})</td>
+                                <td>${safeToFixed(volumePutCallRatio)} (${putVolume}/${callVolume})</td>
                             </tr>
                         </table>
                     </div>
@@ -769,19 +810,19 @@ function updateStatisticsPanel(stats) {
                         <table class="table table-sm">
                             <tr>
                                 <th>异常数据点</th>
-                                <td>${stats.anomalyPoints} (${stats.anomalyPercentage.toFixed(1)}%)</td>
+                                <td>${anomalyPoints} (${safeToFixed(anomalyPercentage, 1)}%)</td>
                             </tr>
                             <tr>
                                 <th>关注级别</th>
-                                <td>${stats.attentionCount}</td>
+                                <td>${attentionCount}</td>
                             </tr>
                             <tr>
                                 <th>警告级别</th>
-                                <td>${stats.warningCount}</td>
+                                <td>${warningCount}</td>
                             </tr>
                             <tr>
                                 <th>严重级别</th>
-                                <td>${stats.severeCount}</td>
+                                <td>${severeCount}</td>
                             </tr>
                         </table>
                     </div>
@@ -790,16 +831,16 @@ function updateStatisticsPanel(stats) {
                     <div class="col-12">
                         <h6 class="font-weight-bold">偏离分布</h6>
                         <div class="progress">
-                            <div class="progress-bar bg-success" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['0-2%'], stats.totalPoints)}%" 
-                                title="0-2%: ${stats.deviationRanges['0-2%']}个数据点">0-2%</div>
-                            <div class="progress-bar bg-info" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['2-4%'], stats.totalPoints)}%" 
-                                title="2-4%: ${stats.deviationRanges['2-4%']}个数据点">2-4%</div>
-                            <div class="progress-bar bg-primary" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['4-6%'], stats.totalPoints)}%" 
-                                title="4-6%: ${stats.deviationRanges['4-6%']}个数据点">4-6%</div>
-                            <div class="progress-bar bg-warning" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['6-8%'], stats.totalPoints)}%" 
-                                title="6-8%: ${stats.deviationRanges['6-8%']}个数据点">6-8%</div>
-                            <div class="progress-bar bg-danger" role="progressbar" style="width: ${calculatePercentage(stats.deviationRanges['8-10%'], stats.totalPoints)}%" 
-                                title="8-10%: ${stats.deviationRanges['8-10%']}个数据点">8-10%</div>
+                            <div class="progress-bar bg-success" role="progressbar" style="width: ${calculatePercentage(safeGet(deviationRanges, '0-2%'), totalPoints)}%" 
+                                title="0-2%: ${safeGet(deviationRanges, '0-2%')}个数据点">0-2%</div>
+                            <div class="progress-bar bg-info" role="progressbar" style="width: ${calculatePercentage(safeGet(deviationRanges, '2-4%'), totalPoints)}%" 
+                                title="2-4%: ${safeGet(deviationRanges, '2-4%')}个数据点">2-4%</div>
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: ${calculatePercentage(safeGet(deviationRanges, '4-6%'), totalPoints)}%" 
+                                title="4-6%: ${safeGet(deviationRanges, '4-6%')}个数据点">4-6%</div>
+                            <div class="progress-bar bg-warning" role="progressbar" style="width: ${calculatePercentage(safeGet(deviationRanges, '6-8%'), totalPoints)}%" 
+                                title="6-8%: ${safeGet(deviationRanges, '6-8%')}个数据点">6-8%</div>
+                            <div class="progress-bar bg-danger" role="progressbar" style="width: ${calculatePercentage(safeGet(deviationRanges, '8-10%'), totalPoints)}%" 
+                                title="8-10%: ${safeGet(deviationRanges, '8-10%')}个数据点">8-10%</div>
                         </div>
                     </div>
                 </div>
@@ -821,10 +862,11 @@ function calculatePercentage(value, total) {
 function createTrendAnalysisChart(data, stats) {
     // 获取趋势分析图元素
     const trendChartElement = document.getElementById('trend-analysis-chart');
-    if (!trendChartElement || !data.length) return;
+    if (!trendChartElement || !data || !data.length) return;
     
     // 根据时间重新组织数据
     const timeSeriesData = organizeTimeSeriesData(data);
+    if (!timeSeriesData || !timeSeriesData.length) return;
     
     // 销毁现有图表
     if (window.trendAnalysisChart) {
@@ -835,7 +877,7 @@ function createTrendAnalysisChart(data, stats) {
     const datasets = [
         {
             label: '成交量',
-            data: timeSeriesData.map(d => d.totalVolume),
+            data: timeSeriesData.map(d => d.totalVolume || 0),
             borderColor: 'rgba(75, 192, 192, 1)',
             backgroundColor: 'rgba(75, 192, 192, 0.2)',
             yAxisID: 'y-volume',
@@ -843,7 +885,7 @@ function createTrendAnalysisChart(data, stats) {
         },
         {
             label: '异常数量',
-            data: timeSeriesData.map(d => d.anomalyCount),
+            data: timeSeriesData.map(d => d.anomalyCount || 0),
             borderColor: 'rgba(255, 99, 132, 1)',
             backgroundColor: 'rgba(255, 99, 132, 0.2)',
             yAxisID: 'y-anomaly',
@@ -851,7 +893,7 @@ function createTrendAnalysisChart(data, stats) {
         },
         {
             label: '看跌/看涨比率',
-            data: timeSeriesData.map(d => d.putCallRatio),
+            data: timeSeriesData.map(d => d.putCallRatio || 0),
             borderColor: 'rgba(54, 162, 235, 1)',
             backgroundColor: 'transparent',
             yAxisID: 'y-ratio',
@@ -928,38 +970,61 @@ function createTrendAnalysisChart(data, stats) {
 
 // 按时间组织数据
 function organizeTimeSeriesData(data) {
+    // 检查数据有效性
+    if (!data || !Array.isArray(data) || data.length === 0) {
+        return [];
+    }
+    
     // 按小时分组数据
     const hourlyData = {};
     
     data.forEach(item => {
-        const date = new Date(item.timestamp);
-        const hourKey = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:00`;
-        
-        if (!hourlyData[hourKey]) {
-            hourlyData[hourKey] = {
-                timeLabel: hourKey,
-                totalVolume: 0,
-                callVolume: 0,
-                putVolume: 0,
-                anomalyCount: 0,
-                dataPoints: 0
-            };
-        }
-        
-        // 累加数据
-        hourlyData[hourKey].dataPoints++;
-        hourlyData[hourKey].totalVolume += item.volume || 0;
-        
-        if (item.option_type === 'call') {
-            hourlyData[hourKey].callVolume += item.volume || 0;
-        } else {
-            hourlyData[hourKey].putVolume += item.volume || 0;
-        }
-        
-        if (item.is_anomaly) {
-            hourlyData[hourKey].anomalyCount++;
+        try {
+            if (!item || !item.timestamp) return;
+            
+            const date = new Date(item.timestamp);
+            if (isNaN(date.getTime())) return; // 跳过无效日期
+            
+            const hourKey = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:00`;
+            
+            if (!hourlyData[hourKey]) {
+                hourlyData[hourKey] = {
+                    timeLabel: hourKey,
+                    totalVolume: 0,
+                    callVolume: 0,
+                    putVolume: 0,
+                    anomalyCount: 0,
+                    dataPoints: 0
+                };
+            }
+            
+            // 累加数据
+            hourlyData[hourKey].dataPoints++;
+            
+            // 安全地增加成交量
+            const volume = item.volume || 0;
+            hourlyData[hourKey].totalVolume += volume;
+            
+            // 根据期权类型累加成交量
+            if (item.option_type === 'call') {
+                hourlyData[hourKey].callVolume += volume;
+            } else if (item.option_type === 'put') {
+                hourlyData[hourKey].putVolume += volume;
+            }
+            
+            // 累加异常计数
+            if (item.is_anomaly) {
+                hourlyData[hourKey].anomalyCount++;
+            }
+        } catch (e) {
+            console.error("Error processing data item:", e);
         }
     });
+    
+    // 检查是否有有效数据
+    if (Object.keys(hourlyData).length === 0) {
+        return [];
+    }
     
     // 计算比率并转换为数组
     const timeSeriesArray = Object.values(hourlyData).map(hour => {
@@ -970,7 +1035,13 @@ function organizeTimeSeriesData(data) {
     });
     
     // 按时间排序
-    timeSeriesArray.sort((a, b) => new Date(a.timeLabel) - new Date(b.timeLabel));
+    timeSeriesArray.sort((a, b) => {
+        try {
+            return new Date(a.timeLabel) - new Date(b.timeLabel);
+        } catch (e) {
+            return 0;
+        }
+    });
     
     // 限制数据点数量以提高性能
     const maxPoints = 24; // 显示最近24小时
@@ -989,50 +1060,86 @@ function updateDeviationTable(data) {
     // 清空表格
     tableBody.innerHTML = '';
     
-    // 填充新数据
-    if (data.length === 0) {
+    // 验证数据
+    if (!data || !Array.isArray(data) || data.length === 0) {
         const row = document.createElement('tr');
-        row.innerHTML = `<td colspan="10" class="text-center">No data available</td>`;
+        row.innerHTML = `<td colspan="13" class="text-center">No data available</td>`;
         tableBody.appendChild(row);
-    } else {
-        // 限制表格中显示的行数
-        const displayData = data.slice(0, 100);
         
-        displayData.forEach(item => {
+        // 更新表格计数器
+        const countElement = document.getElementById('data-count');
+        if (countElement) {
+            countElement.textContent = `Showing 0 of 0 records`;
+        }
+        return;
+    }
+    
+    // 安全获取数值并格式化
+    const safeNumber = (value, decimals = 2) => {
+        if (value === null || value === undefined || isNaN(value)) return 'N/A';
+        return Number(value).toFixed(decimals);
+    };
+    
+    const safeDate = (dateStr) => {
+        try {
+            return new Date(dateStr).toLocaleString();
+        } catch (e) {
+            return 'Invalid Date';
+        }
+    };
+    
+    const safePercent = (value) => {
+        if (value === null || value === undefined || isNaN(value)) return 'N/A';
+        return safeNumber(value) + '%';
+    };
+    
+    // 限制表格中显示的行数
+    const displayData = data.slice(0, 100);
+    
+    displayData.forEach(item => {
+        try {
             const row = document.createElement('tr');
             if (item.is_anomaly) {
                 row.classList.add('table-warning');
             }
             
-            // 格式化数据
-            const timestamp = new Date(item.timestamp).toLocaleString();
-            const strikePrice = item.strike_price.toFixed(2);
-            const marketPrice = item.market_price.toFixed(2);
-            const deviationPercent = item.deviation_percent.toFixed(2) + '%';
-            const volumeChange = item.volume_change_percent !== null ? item.volume_change_percent.toFixed(2) + '%' : 'N/A';
-            const premiumChange = item.premium_change_percent !== null ? item.premium_change_percent.toFixed(2) + '%' : 'N/A';
-            const marketPriceChange = item.market_price_change_percent !== null ? item.market_price_change_percent.toFixed(2) + '%' : 'N/A';
+            // 安全获取并格式化数据
+            const timestamp = safeDate(item.timestamp);
+            const symbol = item.symbol || 'N/A';
+            const exchange = item.exchange || 'N/A';
+            const strikePrice = safeNumber(item.strike_price);
+            const marketPrice = safeNumber(item.market_price);
+            const deviationPercent = safePercent(item.deviation_percent);
+            const optionType = (item.option_type || 'unknown').toUpperCase();
+            const expirationDate = item.expiration_date || 'N/A';
+            const volume = item.volume || 0;
+            const volumeChange = item.volume_change_percent !== null ? safePercent(item.volume_change_percent) : 'N/A';
+            const premium = safeNumber(item.premium);
+            const premiumChange = item.premium_change_percent !== null ? safePercent(item.premium_change_percent) : 'N/A';
+            const marketPriceChange = item.market_price_change_percent !== null ? safePercent(item.market_price_change_percent) : 'N/A';
             
             // 创建单元格
             row.innerHTML = `
                 <td>${timestamp}</td>
-                <td>${item.symbol}</td>
-                <td>${item.exchange}</td>
+                <td>${symbol}</td>
+                <td>${exchange}</td>
                 <td>${strikePrice}</td>
                 <td>${marketPrice}</td>
                 <td>${deviationPercent}</td>
-                <td>${item.option_type.toUpperCase()}</td>
-                <td>${item.expiration_date}</td>
-                <td>${item.volume}</td>
+                <td>${optionType}</td>
+                <td>${expirationDate}</td>
+                <td>${volume}</td>
                 <td>${volumeChange}</td>
-                <td>${item.premium}</td>
+                <td>${premium}</td>
                 <td>${premiumChange}</td>
                 <td>${marketPriceChange}</td>
             `;
             
             tableBody.appendChild(row);
-        });
-    }
+        } catch (e) {
+            console.error("Error processing table row:", e);
+        }
+    });
     
     // 更新表格计数器
     const countElement = document.getElementById('data-count');
