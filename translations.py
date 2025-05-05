@@ -289,5 +289,29 @@ translations = {
     'normal': {
         'en': 'Normal',
         'zh': '正常'
+    },
+    'exchange_comparison': {
+        'en': 'Exchange Comparison',
+        'zh': '交易所比较'
+    },
+    'put_call_ratio_comparison': {
+        'en': 'Put/Call Ratio Comparison',
+        'zh': '看跌/看涨比率比较'
+    },
+    'volume_distribution': {
+        'en': 'Volume Distribution',
+        'zh': '成交量分布'
+    },
+    'premium_spread': {
+        'en': 'Premium Spread',
+        'zh': '期权溢价差异'
+    },
+    'exchange': {
+        'en': 'Exchange',
+        'zh': '交易所'
+    },
+    'option_type': {
+        'en': 'Option Type',
+        'zh': '期权类型'
     }
 }
