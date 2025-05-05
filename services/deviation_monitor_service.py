@@ -241,7 +241,7 @@ def generate_deviation_alert(deviation, anomaly_level, volume_change, premium_ch
     db.session.add(alert)
     logger.info(f"生成{anomaly_level}级别期权偏离警报: {message}")
 
-def get_deviation_data(symbol=None, time_period='4h', is_anomaly=None, days=7, exchange=None, option_type=None, volume_change_min=None):
+def get_deviation_data(symbol=None, time_period='4h', is_anomaly=None, days=7, exchange=None, option_type=None, volume_change_filter=None):
     """
     获取期权执行价偏离数据
     
@@ -252,7 +252,7 @@ def get_deviation_data(symbol=None, time_period='4h', is_anomaly=None, days=7, e
     days - 返回过去几天的数据
     exchange - 交易所，如deribit, binance, okx
     option_type - 期权类型，call或put
-    volume_change_min - 成交量变化率最小值（过滤结果只显示大于此值的条目）
+    volume_change_filter - 成交量变化率最小值（过滤结果只显示大于此值的条目）
     """
     from_date = datetime.utcnow() - timedelta(days=days)
     
@@ -273,11 +273,11 @@ def get_deviation_data(symbol=None, time_period='4h', is_anomaly=None, days=7, e
     if option_type:
         query = query.filter(StrikeDeviationMonitor.option_type == option_type)
         
-    if volume_change_min is not None and volume_change_min > 0:
+    if volume_change_filter is not None and volume_change_filter > 0:
         # 确保只返回volume_change_percent非null且大于等于指定值的记录
         query = query.filter(
             StrikeDeviationMonitor.volume_change_percent.isnot(None),
-            StrikeDeviationMonitor.volume_change_percent >= volume_change_min
+            StrikeDeviationMonitor.volume_change_percent >= volume_change_filter
         )
     
     # 按时间降序排序

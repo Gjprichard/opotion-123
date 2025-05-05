@@ -378,7 +378,7 @@ def deviation_monitor():
         days=days,
         exchange=exchange,
         option_type=option_type if option_type else None,
-        volume_change_min=volume_change_filter if volume_change_filter > 0 else None
+        volume_change_filter=volume_change_filter if volume_change_filter > 0 else None
     )
     
     # 获取未确认的偏离警报
@@ -429,7 +429,7 @@ def deviation_data_api():
             days=days,
             exchange=exchange,
             option_type=option_type if option_type else None,
-            volume_change_min=volume_change_filter if volume_change_filter > 0 else None
+            volume_change_filter=volume_change_filter if volume_change_filter > 0 else None
         )
         
         # 格式化数据
