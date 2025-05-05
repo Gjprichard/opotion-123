@@ -123,6 +123,9 @@
                         <h5>{{ t('market_sentiment') }}</h5>
                         <div class="display-6 font-weight-bold" id="market-sentiment">--</div>
                         <p class="text-muted mt-2">Based on combined risk indicators</p>
+                        <!-- Hidden elements containing translations for JavaScript -->
+                        <span class="d-none" data-sentiment="risk-on">{{ t('risk-on') }}</span>
+                        <span class="d-none" data-sentiment="risk-off">{{ t('risk-off') }}</span>
                     </div>
                     <div class="col-md-9">
                         <div class="chart-container" id="risk-chart-container">

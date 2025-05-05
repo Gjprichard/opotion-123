@@ -148,13 +148,18 @@ function updateCharts(symbol, days) {
 function createRiskChart(data) {
     const ctx = document.getElementById('risk-chart').getContext('2d');
     
+    // Get translated labels from the DOM
+    const volaxivityLabel = document.querySelector('.risk-level:nth-child(1)').textContent;
+    const volatilitySkewLabel = document.querySelector('.risk-level:nth-child(2)').textContent;
+    const putCallRatioLabel = document.querySelector('.risk-level:nth-child(3)').textContent;
+    
     riskChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.timestamps,
             datasets: [
                 {
-                    label: 'Volaxivity',
+                    label: volaxivityLabel,
                     data: data.volaxivity,
                     borderColor: 'rgba(255, 99, 132, 1)',
                     backgroundColor: 'rgba(255, 99, 132, 0.1)',
@@ -163,7 +168,7 @@ function createRiskChart(data) {
                     fill: true
                 },
                 {
-                    label: 'Volatility Skew',
+                    label: volatilitySkewLabel,
                     data: data.volatility_skew,
                     borderColor: 'rgba(54, 162, 235, 1)',
                     backgroundColor: 'rgba(54, 162, 235, 0.1)',
@@ -172,7 +177,7 @@ function createRiskChart(data) {
                     fill: true
                 },
                 {
-                    label: 'Put/Call Ratio',
+                    label: putCallRatioLabel,
                     data: data.put_call_ratio,
                     borderColor: 'rgba(255, 206, 86, 1)',
                     backgroundColor: 'rgba(255, 206, 86, 0.1)',
@@ -216,13 +221,17 @@ function createRiskChart(data) {
 function createReflexivityChart(data) {
     const ctx = document.getElementById('reflexivity-chart').getContext('2d');
     
+    // Get translated labels from the DOM
+    const reflexivityLabel = document.querySelector('.risk-level:nth-child(4)').textContent;
+    const chartTitle = document.querySelector('.card-header h6').textContent;
+    
     reflexivityChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.timestamps,
             datasets: [
                 {
-                    label: 'Reflexivity Indicator',
+                    label: reflexivityLabel,
                     data: data.reflexivity,
                     borderColor: 'rgba(153, 102, 255, 1)',
                     backgroundColor: 'rgba(153, 102, 255, 0.1)',
@@ -245,7 +254,7 @@ function createReflexivityChart(data) {
                 },
                 title: {
                     display: true,
-                    text: 'Market Reflexivity (Feedback Loop Intensity)'
+                    text: chartTitle
                 }
             },
             scales: {
@@ -312,9 +321,24 @@ function updateMarketSentiment(symbol) {
     
     const marketSentiment = riskOffSignals >= 2 ? 'risk-off' : 'risk-on';
     
+    // Find translations in DOM
+    const translatedLabels = {};
+    document.querySelectorAll('[data-sentiment]').forEach(el => {
+        translatedLabels[el.dataset.sentiment] = el.textContent;
+    });
+    
+    // Get translated sentiment text
+    let sentimentText;
+    if (marketSentiment === 'risk-on') {
+        // Try to find the translation in our DOM, fallback to English
+        sentimentText = translatedLabels['risk-on'] || 'Risk-On (Bullish)';
+    } else {
+        sentimentText = translatedLabels['risk-off'] || 'Risk-Off (Bearish)';
+    }
+    
     // Update sentiment indicator
     const sentimentElement = document.getElementById('market-sentiment');
-    sentimentElement.textContent = marketSentiment === 'risk-on' ? 'Risk-On (Bullish)' : 'Risk-Off (Bearish)';
+    sentimentElement.textContent = sentimentText;
     
     // Update sentiment color
     if (marketSentiment === 'risk-on') {
