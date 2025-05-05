@@ -1291,13 +1291,31 @@ const DataService = {
      * @returns {Object} 过滤参数对象
      */
     getFilterParams() {
-        const symbol = document.getElementById('symbol-filter').value;
-        const exchange = document.getElementById('exchange-filter').value;
-        const optionType = document.getElementById('option-type-filter').value;
-        const timePeriod = document.getElementById('time-period-filter').value;
-        const days = document.getElementById('days-filter').value;
-        const volumeChangeFilter = document.getElementById('volume-change-filter').value;
-        const anomalyOnly = document.getElementById('anomaly-only-filter').checked;
+        // 获取DOM元素值或使用默认值
+        let symbol = 'BTC';
+        let exchange = 'deribit';
+        let optionType = '';
+        let timePeriod = '15m';  // 默认使用15分钟时间周期
+        let days = '7';
+        let volumeChangeFilter = '0';
+        let anomalyOnly = false;
+        
+        // 如果DOM元素存在，则获取其值
+        const symbolEl = document.getElementById('symbol-filter');
+        const exchangeEl = document.getElementById('exchange-filter');
+        const optionTypeEl = document.getElementById('option-type-filter');
+        const timePeriodEl = document.getElementById('time-period-filter');
+        const daysEl = document.getElementById('days-filter');
+        const volumeChangeFilterEl = document.getElementById('volume-change-filter');
+        const anomalyOnlyEl = document.getElementById('anomaly-only-filter');
+        
+        if (symbolEl) symbol = symbolEl.value;
+        if (exchangeEl) exchange = exchangeEl.value;
+        if (optionTypeEl) optionType = optionTypeEl.value;
+        if (timePeriodEl) timePeriod = timePeriodEl.value;
+        if (daysEl) days = daysEl.value;
+        if (volumeChangeFilterEl) volumeChangeFilter = volumeChangeFilterEl.value;
+        if (anomalyOnlyEl) anomalyOnly = anomalyOnlyEl.checked;
         
         const filters = {
             symbol,
@@ -1371,7 +1389,7 @@ const DataService = {
             UIUtils.updateElementText('reflexivity-value', reflexivity !== undefined ? DataUtils.formatPercent(reflexivity * 100) : 'N/A');
             
             // 基于时间周期设置阈值
-            const timePeriodKey = timePeriod || '4h';
+            const timePeriodKey = timePeriod || '15m';
             
             // 更新风险等级指示器
             if (volaxivity !== undefined) {
@@ -1446,7 +1464,7 @@ const DataService = {
         if (!indicatorThresholds) return {attention: 0, warning: 0, severe: 0};
         
         const periodThresholds = DataUtils.getProperty(indicatorThresholds, timePeriod);
-        return periodThresholds || DataUtils.getProperty(indicatorThresholds, '4h') || {attention: 0, warning: 0, severe: 0};
+        return periodThresholds || DataUtils.getProperty(indicatorThresholds, '15m') || {attention: 0, warning: 0, severe: 0};
     },
     
     /**

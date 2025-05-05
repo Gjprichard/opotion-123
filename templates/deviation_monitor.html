@@ -2,9 +2,78 @@
 
 {% block content %}
 <div class="row mb-4">
-    <div class="col">
+    <div class="col-md-6">
         <h1 class="h3 mb-0 text-gray-800">{{ t('option_deviation_monitor') }}</h1>
         <p class="text-muted">{{ t('monitor_options_with_strike_prices_deviating') }} &plusmn;10% {{ t('from_market_price') }}</p>
+    </div>
+    <div class="col-md-6 text-right">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="collapse" data-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse">
+            <i class="fas fa-filter"></i> {{ t('filters') }}
+        </button>
+    </div>
+    <div class="col-12">
+        <div class="collapse mt-2" id="filterCollapse">
+            <div class="card card-body shadow-sm">
+                <form id="filter-form" class="row g-3 align-items-end">
+                    <div class="col-md-2">
+                        <label for="symbol-filter" class="form-label">{{ t('symbol') }}</label>
+                        <select class="form-select" id="symbol-filter">
+                            <option value="BTC" {% if symbol == 'BTC' %}selected{% endif %}>BTC</option>
+                            <option value="ETH" {% if symbol == 'ETH' %}selected{% endif %}>ETH</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="exchange-filter" class="form-label">{{ t('exchange') }}</label>
+                        <select class="form-select" id="exchange-filter">
+                            <option value="deribit" {% if exchange == 'deribit' %}selected{% endif %}>Deribit</option>
+                            <option value="binance" {% if exchange == 'binance' %}selected{% endif %}>Binance</option>
+                            <option value="okx" {% if exchange == 'okx' %}selected{% endif %}>OKX</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="option-type-filter" class="form-label">{{ t('option_type') }}</label>
+                        <select class="form-select" id="option-type-filter">
+                            <option value="" {% if option_type == '' %}selected{% endif %}>{{ t('all') }}</option>
+                            <option value="call" {% if option_type == 'call' %}selected{% endif %}>{{ t('call') }}</option>
+                            <option value="put" {% if option_type == 'put' %}selected{% endif %}>{{ t('put') }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="time-period-filter" class="form-label">{{ t('time_period') }}</label>
+                        <select class="form-select" id="time-period-filter">
+                            <option value="15m" {% if time_period == '15m' %}selected{% endif %}>15{{ t('m') }}</option>
+                            <option value="1h" {% if time_period == '1h' %}selected{% endif %}>1{{ t('h') }}</option>
+                            <option value="4h" {% if time_period == '4h' %}selected{% endif %}>4{{ t('h') }}</option>
+                            <option value="1d" {% if time_period == '1d' %}selected{% endif %}>1{{ t('d') }}</option>
+                            <option value="7d" {% if time_period == '7d' %}selected{% endif %}>7{{ t('d') }}</option>
+                            <option value="30d" {% if time_period == '30d' %}selected{% endif %}>30{{ t('d') }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="volume-change-filter" class="form-label">{{ t('volume_change_min') }}</label>
+                        <select class="form-select" id="volume-change-filter">
+                            <option value="0" {% if volume_change_filter == 0 %}selected{% endif %}>{{ t('all') }}</option>
+                            <option value="20" {% if volume_change_filter == 20 %}selected{% endif %}>≥ 20%</option>
+                            <option value="50" {% if volume_change_filter == 50 %}selected{% endif %}>≥ 50%</option>
+                            <option value="100" {% if volume_change_filter == 100 %}selected{% endif %}>≥ 100%</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="anomaly-only-filter" {% if anomaly_only %}checked{% endif %}>
+                            <label class="form-check-label" for="anomaly-only-filter">
+                                {{ t('anomaly_only') }}
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-primary" id="apply-filters-btn">
+                            {{ t('apply_filters') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -179,100 +248,12 @@
     </div>
 </div>
 
-<!-- Filters Card -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card shadow border-left-primary">
-            <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                <h6 class="m-0 font-weight-bold text-primary">{{ t('filters') }}</h6>
-            </div>
-            <div class="card-body">
-                <form id="filter-form" class="row g-3 align-items-end">
-                    <!-- Symbol -->
-                    <div class="col-md-2 mb-2">
-                        <label for="symbol-filter" class="form-label">{{ t('symbol') }}</label>
-                        <select class="form-select" id="symbol-filter">
-                            {% for sym in symbols %}
-                            <option value="{{ sym }}" {% if sym == symbol %}selected{% endif %}>{{ sym }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <!-- Exchange -->
-                    <div class="col-md-2 mb-2">
-                        <label for="exchange-filter" class="form-label">{{ t('exchange') }}</label>
-                        <select class="form-select" id="exchange-filter">
-                            <option value="deribit" selected>Deribit</option>
-                            <option value="binance" {% if exchange == 'binance' %}selected{% endif %}>Binance</option>
-                            <option value="okx" {% if exchange == 'okx' %}selected{% endif %}>OKX</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Option Type -->
-                    <div class="col-md-2 mb-2">
-                        <label for="option-type-filter" class="form-label">{{ t('option_type') }}</label>
-                        <select class="form-select" id="option-type-filter">
-                            <option value="" {% if not option_type %}selected{% endif %}>{{ t('all') }}</option>
-                            <option value="call" {% if option_type == 'call' %}selected{% endif %}>Call</option>
-                            <option value="put" {% if option_type == 'put' %}selected{% endif %}>Put</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Time Period -->
-                    <div class="col-md-2 mb-2">
-                        <label for="time-period-filter" class="form-label">{{ t('time_period') }}</label>
-                        <select class="form-select" id="time-period-filter">
-                            {% for period_key, period_info in time_periods.items() %}
-                            <option value="{{ period_key }}" {% if period_key == current_time_period %}selected{% endif %}>{{ period_info.label }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <!-- Days -->
-                    <div class="col-md-2 mb-2">
-                        <label for="days-filter" class="form-label">{{ t('days') }}</label>
-                        <select class="form-select" id="days-filter">
-                            <option value="1" {% if days == 1 %}selected{% endif %}>1 {{ t('day') }}</option>
-                            <option value="3" {% if days == 3 %}selected{% endif %}>3 {{ t('days') }}</option>
-                            <option value="7" {% if days == 7 %}selected{% endif %}>7 {{ t('days') }}</option>
-                            <option value="14" {% if days == 14 %}selected{% endif %}>14 {{ t('days') }}</option>
-                            <option value="30" {% if days == 30 %}selected{% endif %}>30 {{ t('days') }}</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Volume Change Filter -->
-                    <div class="col-md-2 mb-2">
-                        <label for="volume-change-filter" class="form-label">{{ t('volume_change_min') }}</label>
-                        <select class="form-select" id="volume-change-filter">
-                            <option value="0" {% if volume_change_filter == 0 %}selected{% endif %}>{{ t('all') }}</option>
-                            <option value="20" {% if volume_change_filter == 20 %}selected{% endif %}>≥ 20%</option>
-                            <option value="50" {% if volume_change_filter == 50 %}selected{% endif %}>≥ 50%</option>
-                            <option value="100" {% if volume_change_filter == 100 %}selected{% endif %}>≥ 100%</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Show anomalies only -->
-                    <div class="col-md-6 mb-2 mt-2">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="anomaly-only-filter" {% if anomaly_only %}checked{% endif %}>
-                            <label class="form-check-label" for="anomaly-only-filter">
-                                {{ t('show_anomalies_only') }}
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <!-- Apply Filters Button -->
-                    <div class="col-md-6 mb-2 text-end">
-                        <button type="button" class="btn btn-primary" id="apply-filters-btn">
-                            {{ t('apply_filters') }}
-                        </button>
-                        <button type="button" class="btn btn-success ms-2" id="refresh-data-btn">
-                            <i class="fas fa-sync-alt"></i> {{ t('refresh') }}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+<!-- Refresh Data Button -->
+<div class="row mb-2">
+    <div class="col-12 text-end">
+        <button type="button" class="btn btn-success" id="refresh-data-btn">
+            <i class="fas fa-sync-alt"></i> {{ t('refresh') }}
+        </button>
     </div>
 </div>
 

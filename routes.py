@@ -18,12 +18,12 @@ def index():
 
 @app.route('/dashboard')
 def dashboard():
-    # 获取时间周期参数，默认为4h
-    time_period = request.args.get('time_period', '4h')
+    # 获取时间周期参数，默认为15m
+    time_period = request.args.get('time_period', '15m')
     
     # 确保时间周期有效
     if time_period not in Config.TIME_PERIODS:
-        time_period = '4h'
+        time_period = '15m'
     
     # 获取每个跟踪符号的最新风险指标
     latest_risk = {}
@@ -62,11 +62,11 @@ def dashboard_data():
     try:
         symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
         days = int(request.args.get('days', 30))
-        time_period = request.args.get('time_period', '4h')
+        time_period = request.args.get('time_period', '15m')
         
         # 确保时间周期有效
         if time_period not in Config.TIME_PERIODS:
-            time_period = '4h'
+            time_period = '15m'
         
         app.logger.info(f"Fetching dashboard data for symbol={symbol}, days={days}, time_period={time_period}")
         
@@ -111,12 +111,12 @@ def dashboard_data():
 
 @app.route('/alerts')
 def alerts_view():
-    # 获取时间周期参数，默认为4h
-    time_period = request.args.get('time_period', '4h')
+    # 获取时间周期参数，默认为15m
+    time_period = request.args.get('time_period', '15m')
     
     # 确保时间周期有效
     if time_period not in Config.TIME_PERIODS:
-        time_period = '4h'
+        time_period = '15m'
     
     # Get all alerts, including acknowledged ones (filtered by time_period)
     all_alerts = Alert.query.filter_by(time_period=time_period).order_by(Alert.timestamp.desc()).limit(100).all()
@@ -149,14 +149,14 @@ def acknowledge_alert_api():
 @app.route('/api/alerts/threshold', methods=['POST'])
 def update_threshold():
     indicator = request.json.get('indicator')
-    time_period = request.json.get('time_period', '4h')
+    time_period = request.json.get('time_period', '15m')
     attention = float(request.json.get('attention'))
     warning = float(request.json.get('warning'))
     severe = float(request.json.get('severe'))
     
     # 确保时间周期有效
     if time_period not in Config.TIME_PERIODS:
-        time_period = '4h'
+        time_period = '15m'
     
     if not all([indicator, attention, warning, severe]):
         return jsonify({'success': False, 'message': 'All fields are required'}), 400
@@ -173,11 +173,11 @@ def historical():
     symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
     option_type = request.args.get('type', 'call')
     days = int(request.args.get('days', 30))
-    time_period = request.args.get('time_period', '4h')
+    time_period = request.args.get('time_period', '15m')
     
     # 确保时间周期有效
     if time_period not in Config.TIME_PERIODS:
-        time_period = '4h'
+        time_period = '15m'
     
     # Get historical option data
     from_date = datetime.utcnow() - timedelta(days=days)
@@ -312,11 +312,11 @@ def delete_scenario(scenario_id):
 
 @app.route('/settings')
 def settings():
-    time_period = request.args.get('time_period', '4h')
+    time_period = request.args.get('time_period', '15m')
     
     # 确保时间周期有效
     if time_period not in Config.TIME_PERIODS:
-        time_period = '4h'
+        time_period = '15m'
     
     # 获取当前时间周期的警报阈值
     thresholds = AlertThreshold.query.filter_by(time_period=time_period).all()
@@ -359,7 +359,7 @@ def refresh_data():
 def deviation_monitor():
     """期权执行价偏离监控页面"""
     symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
-    time_period = request.args.get('time_period', '4h')
+    time_period = request.args.get('time_period', '15m')
     anomaly_only = request.args.get('anomaly_only', 'false').lower() == 'true'
     days = int(request.args.get('days', 7))
     exchange = request.args.get('exchange', 'deribit')
@@ -368,7 +368,7 @@ def deviation_monitor():
     
     # 确保时间周期有效
     if time_period not in Config.TIME_PERIODS:
-        time_period = '4h'
+        time_period = '15m'
     
     # 获取偏离数据 - 现在返回包含统计信息的字典
     deviation_data = get_deviation_data(
@@ -418,7 +418,7 @@ def deviation_data_api():
     """获取期权执行价偏离数据API"""
     try:
         symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
-        time_period = request.args.get('time_period', '4h')
+        time_period = request.args.get('time_period', '15m')
         anomaly_only = request.args.get('anomaly_only', 'false').lower() == 'true'
         days = int(request.args.get('days', 7))
         exchange = request.args.get('exchange', 'deribit')
@@ -431,7 +431,7 @@ def deviation_data_api():
         
         # 确保时间周期有效
         if time_period not in Config.TIME_PERIODS:
-            time_period = '4h'
+            time_period = '15m'
         
         # 获取偏离数据和统计信息
         deviation_data = get_deviation_data(
@@ -493,7 +493,7 @@ def deviation_alerts_api():
     """获取期权执行价偏离警报API"""
     try:
         symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
-        time_period = request.args.get('time_period', '4h')
+        time_period = request.args.get('time_period', '15m')
         acknowledged = request.args.get('acknowledged')
         exchange = request.args.get('exchange', 'deribit')
         option_type = request.args.get('option_type', '')  # 'call', 'put' 或空字符串表示所有
@@ -503,7 +503,7 @@ def deviation_alerts_api():
         
         # 确保时间周期有效
         if time_period not in Config.TIME_PERIODS:
-            time_period = '4h'
+            time_period = '15m'
         
         # 获取偏离警报
         alerts = get_deviation_alerts(
@@ -563,7 +563,7 @@ def deviation_volume_analysis_api():
     """获取期权执行价偏离监控的多空成交量分析数据API"""
     try:
         symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
-        time_period = request.args.get('time_period', '4h')
+        time_period = request.args.get('time_period', '15m')
         days = int(request.args.get('days', 7))
         include_history = request.args.get('include_history', 'true').lower() == 'true'
         
@@ -572,7 +572,7 @@ def deviation_volume_analysis_api():
         
         # 确保时间周期有效
         if time_period not in Config.TIME_PERIODS:
-            time_period = '4h'
+            time_period = '15m'
         
         # 从deviation_monitor_service中导入所需的函数
         from services.deviation_monitor_service import get_call_put_volume_analysis

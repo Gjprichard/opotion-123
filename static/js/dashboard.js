@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 获取当前选择的交易对和时间周期
     const selectedSymbol = document.getElementById('symbol-selector').value || 'BTC';
-    const selectedTimePeriod = document.getElementById('time-period-selector').value || '4h';
+    const selectedTimePeriod = document.getElementById('time-period-selector').value || '15m';
     
     // 初始化图表
     loadDashboardData(selectedSymbol, 30, selectedTimePeriod);
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 设置自动刷新（每分钟）
     setInterval(function() {
         const currentSymbol = document.getElementById('symbol-selector').value || 'BTC';
-        const currentTimePeriod = document.getElementById('time-period-selector').value || '4h';
+        const currentTimePeriod = document.getElementById('time-period-selector').value || '15m';
         loadDashboardData(currentSymbol, 30, currentTimePeriod);
     }, 60000);
 });
@@ -37,7 +37,7 @@ function setupEventListeners() {
     if (symbolSelector) {
         symbolSelector.addEventListener('change', function() {
             const symbol = this.value;
-            const timePeriod = document.getElementById('time-period-selector').value || '4h';
+            const timePeriod = document.getElementById('time-period-selector').value || '15m';
             loadDashboardData(symbol, 30, timePeriod);
         });
     }
@@ -66,7 +66,7 @@ function setupEventListeners() {
                 // 获取天数和符号并更新图表
                 const days = parseInt(this.getAttribute('data-days')) || 30;
                 const symbol = document.getElementById('symbol-selector').value || 'BTC';
-                const timePeriod = document.getElementById('time-period-selector').value || '4h';
+                const timePeriod = document.getElementById('time-period-selector').value || '15m';
                 loadDashboardData(symbol, days, timePeriod);
             });
         });
@@ -81,7 +81,7 @@ function setupEventListeners() {
             this.disabled = true;
             
             const symbol = document.getElementById('symbol-selector').value || 'BTC';
-            const timePeriod = document.getElementById('time-period-selector').value || '4h';
+            const timePeriod = document.getElementById('time-period-selector').value || '15m';
             
             // 调用API刷新数据
             fetch('/api/data/refresh', {
@@ -123,7 +123,7 @@ function setupEventListeners() {
 }
 
 // 加载仪表盘数据
-function loadDashboardData(symbol, days = 30, timePeriod = '4h') {
+function loadDashboardData(symbol, days = 30, timePeriod = '15m') {
     console.log(`加载${symbol}的最近${days}天数据，时间周期：${timePeriod}...`);
     
     // 显示加载指示器
@@ -364,7 +364,7 @@ function updateRiskIndicators(symbol, data) {
     
     // 确定市场情绪（根据选择的时间周期设置不同的阈值）
     let riskOffSignals = 0;
-    let timePeriod = document.getElementById('time-period-selector').value || '4h';
+    let timePeriod = document.getElementById('time-period-selector').value || '15m';
     
     // 根据时间周期设置不同的阈值
     let volaxivityThreshold, pcrThreshold, reflexivityThreshold;
