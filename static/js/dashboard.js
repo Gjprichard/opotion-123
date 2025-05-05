@@ -1,91 +1,104 @@
-// dashboard.js - Handles the dashboard page functionality
+// dashboard.js - 完全重构的仪表盘功能
+// 用于显示期权市场风险监控数据
 
-// Declare variables for charts so we can update them
+// 声明全局变量以存储图表对象
 let riskChart = null;
 let reflexivityChart = null;
 let symbolsData = {};
 
-// Initialize the dashboard when the page loads
+// 当页面加载完成时初始化仪表盘
 document.addEventListener('DOMContentLoaded', function() {
-    // Get the currently selected symbol
-    const selectedSymbol = document.getElementById('symbol-selector').value;
+    console.log('页面加载完成，初始化仪表盘...');
     
-    // Initialize charts
-    initializeCharts(selectedSymbol);
-    
-    // Set up event listeners
+    // 初始化事件监听器
     setupEventListeners();
     
-    // Set up auto-refresh
+    // 获取当前选择的交易对
+    const selectedSymbol = document.getElementById('symbol-selector').value || 'BTC';
+    
+    // 初始化图表
+    loadDashboardData(selectedSymbol, 30);
+    
+    // 设置自动刷新（每分钟）
     setInterval(function() {
-        refreshDashboard();
-    }, 60000); // Refresh every minute
+        const currentSymbol = document.getElementById('symbol-selector').value || 'BTC';
+        loadDashboardData(currentSymbol, 30);
+    }, 60000);
 });
 
-// Set up event listeners for interactive elements
+// 设置所有事件监听器
 function setupEventListeners() {
-    // Symbol selector change
-    document.getElementById('symbol-selector').addEventListener('change', function() {
-        const selectedSymbol = this.value;
-        initializeCharts(selectedSymbol);
-    });
+    console.log('设置事件监听器...');
     
-    // Time period selector
-    document.querySelectorAll('.time-period-selector button').forEach(button => {
-        button.addEventListener('click', function() {
-            // Remove active class from all buttons
-            document.querySelectorAll('.time-period-selector button').forEach(btn => {
-                btn.classList.remove('active');
+    // 交易对选择器变化时更新数据
+    const symbolSelector = document.getElementById('symbol-selector');
+    if (symbolSelector) {
+        symbolSelector.addEventListener('change', function() {
+            const symbol = this.value;
+            loadDashboardData(symbol, 30);
+        });
+    }
+    
+    // 时间周期选择器
+    const timeButtons = document.querySelectorAll('.time-period-selector button');
+    if (timeButtons.length > 0) {
+        timeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                // 移除所有按钮的active类
+                timeButtons.forEach(btn => btn.classList.remove('active'));
+                
+                // 添加active类到当前按钮
+                this.classList.add('active');
+                
+                // 获取天数和符号并更新图表
+                const days = parseInt(this.getAttribute('data-days')) || 30;
+                const symbol = document.getElementById('symbol-selector').value || 'BTC';
+                loadDashboardData(symbol, days);
             });
-            
-            // Add active class to clicked button
-            this.classList.add('active');
-            
-            // Get the days value and update charts
-            const days = parseInt(this.getAttribute('data-days'));
-            const selectedSymbol = document.getElementById('symbol-selector').value;
-            updateCharts(selectedSymbol, days);
         });
-    });
+    }
     
-    // Manual refresh button
-    document.getElementById('refresh-data').addEventListener('click', function() {
-        const selectedSymbol = document.getElementById('symbol-selector').value;
-        
-        // Show loading spinner
-        this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Refreshing...';
-        this.disabled = true;
-        
-        // Call the refresh API
-        fetch('/api/data/refresh', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ symbol: selectedSymbol })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Refresh the dashboard
-                refreshDashboard();
-                showToast('Data refreshed successfully', 'success');
-            } else {
-                showToast('Error refreshing data: ' + data.message, 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error connecting to server', 'danger');
-        })
-        .finally(() => {
-            // Restore button
-            this.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh Data';
-            this.disabled = false;
+    // 刷新数据按钮
+    const refreshButton = document.getElementById('refresh-data');
+    if (refreshButton) {
+        refreshButton.addEventListener('click', function() {
+            // 显示加载状态
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 刷新中...';
+            this.disabled = true;
+            
+            const symbol = document.getElementById('symbol-selector').value || 'BTC';
+            
+            // 调用API刷新数据
+            fetch('/api/data/refresh', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ symbol: symbol })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 刷新成功后重新加载仪表盘数据
+                    loadDashboardData(symbol, 30);
+                    showToast('数据刷新成功', 'success');
+                } else {
+                    showToast('刷新数据失败: ' + (data.message || '未知错误'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('刷新数据出错:', error);
+                showToast('连接服务器出错', 'danger');
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                refreshButton.innerHTML = '<i class="fas fa-sync-alt"></i> 刷新数据';
+                refreshButton.disabled = false;
+            });
         });
-    });
+    }
     
-    // Alert acknowledgement
+    // 警报确认按钮
     document.querySelectorAll('.acknowledge-alert').forEach(button => {
         button.addEventListener('click', function() {
             const alertId = this.getAttribute('data-alert-id');
@@ -94,73 +107,93 @@ function setupEventListeners() {
     });
 }
 
-// Initialize charts with data from the API
-function initializeCharts(symbol, days = 30) {
-    // Show loading indicators
-    document.getElementById('risk-chart-container').innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
-    document.getElementById('reflexivity-chart-container').innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+// 加载仪表盘数据
+function loadDashboardData(symbol, days = 30) {
+    console.log(`加载${symbol}的最近${days}天数据...`);
     
-    // Fetch data from the API
+    // 显示加载指示器
+    const riskChartContainer = document.getElementById('risk-chart-container');
+    const reflexivityChartContainer = document.getElementById('reflexivity-chart-container');
+    
+    if (riskChartContainer) {
+        riskChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    }
+    
+    if (reflexivityChartContainer) {
+        reflexivityChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    }
+    
+    // 调用API获取数据
     fetch(`/api/dashboard/data?symbol=${symbol}&days=${days}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP错误! 状态: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            // Store the data
+            console.log('获取到的数据:', data);
+            
+            // 存储数据以供后续使用
             symbolsData[symbol] = data;
             
-            // Clear loading indicators
-            document.getElementById('risk-chart-container').innerHTML = '<canvas id="risk-chart"></canvas>';
-            document.getElementById('reflexivity-chart-container').innerHTML = '<canvas id="reflexivity-chart"></canvas>';
+            // 清除加载指示器
+            if (riskChartContainer) {
+                riskChartContainer.innerHTML = '<canvas id="risk-chart"></canvas>';
+            }
             
-            // Create charts
+            if (reflexivityChartContainer) {
+                reflexivityChartContainer.innerHTML = '<canvas id="reflexivity-chart"></canvas>';
+            }
+            
+            // 创建图表
             createRiskChart(data);
             createReflexivityChart(data);
             
-            // Update market sentiment indicators
-            updateMarketSentiment(symbol);
+            // 更新市场情绪和风险指标显示
+            updateRiskIndicators(symbol, data);
         })
         .catch(error => {
-            console.error('Error fetching dashboard data:', error);
-            document.getElementById('risk-chart-container').innerHTML = '<div class="alert alert-danger">Error loading chart data</div>';
-            document.getElementById('reflexivity-chart-container').innerHTML = '<div class="alert alert-danger">Error loading chart data</div>';
-        });
-}
-
-// Update charts with new time period
-function updateCharts(symbol, days) {
-    // Fetch data from the API
-    fetch(`/api/dashboard/data?symbol=${symbol}&days=${days}`)
-        .then(response => response.json())
-        .then(data => {
-            // Store the data
-            symbolsData[symbol] = data;
+            console.error('获取仪表盘数据出错:', error);
             
-            // Update existing charts
-            updateRiskChart(data);
-            updateReflexivityChart(data);
-        })
-        .catch(error => {
-            console.error('Error fetching dashboard data:', error);
-            showToast('Error loading chart data', 'danger');
+            if (riskChartContainer) {
+                riskChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错</div>';
+            }
+            
+            if (reflexivityChartContainer) {
+                reflexivityChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错</div>';
+            }
         });
 }
 
-// Create the risk indicators chart
+// 创建风险指标图表
 function createRiskChart(data) {
-    const ctx = document.getElementById('risk-chart').getContext('2d');
+    console.log('创建风险指标图表...');
     
-    // Get translated labels from the DOM
-    const volaxivityLabel = document.querySelector('.risk-level:nth-child(1)').textContent;
-    const volatilitySkewLabel = document.querySelector('.risk-level:nth-child(2)').textContent;
-    const putCallRatioLabel = document.querySelector('.risk-level:nth-child(3)').textContent;
+    const riskChartElement = document.getElementById('risk-chart');
+    if (!riskChartElement) return;
     
+    const ctx = riskChartElement.getContext('2d');
+    
+    // 获取翻译后的标签
+    const volaxivityLabel = document.querySelector('.risk-level:nth-child(1)')?.textContent || 'Volaxivity';
+    const volatilitySkewLabel = document.querySelector('.risk-level:nth-child(2)')?.textContent || 'Volatility Skew';
+    const putCallRatioLabel = document.querySelector('.risk-level:nth-child(3)')?.textContent || 'Put/Call Ratio';
+    
+    // 销毁现有图表（如果存在）
+    if (riskChart) {
+        riskChart.destroy();
+    }
+    
+    // 创建新图表
     riskChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: data.timestamps,
+            labels: data.timestamps || [],
             datasets: [
                 {
                     label: volaxivityLabel,
-                    data: data.volaxivity,
+                    data: data.volaxivity || [],
                     borderColor: 'rgba(255, 99, 132, 1)',
                     backgroundColor: 'rgba(255, 99, 132, 0.1)',
                     borderWidth: 2,
@@ -169,7 +202,7 @@ function createRiskChart(data) {
                 },
                 {
                     label: volatilitySkewLabel,
-                    data: data.volatility_skew,
+                    data: data.volatility_skew || [],
                     borderColor: 'rgba(54, 162, 235, 1)',
                     backgroundColor: 'rgba(54, 162, 235, 0.1)',
                     borderWidth: 2,
@@ -178,7 +211,7 @@ function createRiskChart(data) {
                 },
                 {
                     label: putCallRatioLabel,
-                    data: data.put_call_ratio,
+                    data: data.put_call_ratio || [],
                     borderColor: 'rgba(255, 206, 86, 1)',
                     backgroundColor: 'rgba(255, 206, 86, 0.1)',
                     borderWidth: 2,
@@ -200,7 +233,7 @@ function createRiskChart(data) {
                 },
                 title: {
                     display: true,
-                    text: 'Risk Indicators'
+                    text: '风险指标'
                 }
             },
             scales: {
@@ -217,124 +250,104 @@ function createRiskChart(data) {
     });
 }
 
-// Create the reflexivity chart
+// 创建反身性指标图表
 function createReflexivityChart(data) {
-    try {
-        const ctx = document.getElementById('reflexivity-chart').getContext('2d');
-        
-        // 获取翻译标签，使用更可靠的选择器并提供默认值
-        let reflexivityLabel = '反身性指标';
-        const reflexivityElement = document.querySelector('.risk-level.text-warning');
-        if (reflexivityElement) {
-            reflexivityLabel = reflexivityElement.textContent;
-        }
-        
-        // 使用正确的数据字段名称
-        const reflexivityData = data.reflexivity_indicator || [];
-        
-        // 获取标题文本
-        let chartTitle = '反身性指标';
-        const titleElement = document.querySelector('.card-header h6');
-        if (titleElement) {
-            chartTitle = titleElement.textContent;
-        }
-        
-        reflexivityChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: data.timestamps,
-                datasets: [
-                    {
-                        label: reflexivityLabel,
-                        data: reflexivityData,
-                        borderColor: 'rgba(153, 102, 255, 1)',
-                        backgroundColor: 'rgba(153, 102, 255, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.4,
-                        fill: true
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false
-                    },
-                    title: {
-                        display: true,
-                        text: chartTitle
+    console.log('创建反身性指标图表...');
+    
+    const reflexivityChartElement = document.getElementById('reflexivity-chart');
+    if (!reflexivityChartElement) return;
+    
+    const ctx = reflexivityChartElement.getContext('2d');
+    
+    // 获取翻译后的标签
+    const reflexivityLabel = document.querySelector('.risk-level:nth-child(4)')?.textContent || 'Reflexivity Indicator';
+    
+    // 销毁现有图表（如果存在）
+    if (reflexivityChart) {
+        reflexivityChart.destroy();
+    }
+    
+    // 创建新图表
+    reflexivityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.timestamps || [],
+            datasets: [
+                {
+                    label: reflexivityLabel,
+                    data: data.reflexivity_indicator || [],
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + (context.raw * 100).toFixed(2) + '%';
+                        }
                     }
                 },
-                scales: {
-                    x: {
-                        ticks: {
-                            maxTicksLimit: 10
-                        }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        max: 1,
-                        ticks: {
-                            callback: function(value) {
-                                return (value * 100) + '%';
-                            }
+                title: {
+                    display: true,
+                    text: '反身性指标'
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        maxTicksLimit: 10
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    max: 1,
+                    ticks: {
+                        callback: function(value) {
+                            return (value * 100).toFixed(0) + '%';
                         }
                     }
                 }
             }
-        });
-    } catch (error) {
-        console.error('Error creating reflexivity chart:', error);
-        document.getElementById('reflexivity-chart-container').innerHTML = '<div class="alert alert-danger">Error creating chart: ' + error.message + '</div>';
-    }
+        }
+    });
 }
 
-// Update the risk chart with new data
-function updateRiskChart(data) {
-    riskChart.data.labels = data.timestamps;
-    riskChart.data.datasets[0].data = data.volaxivity;
-    riskChart.data.datasets[1].data = data.volatility_skew;
-    riskChart.data.datasets[2].data = data.put_call_ratio;
-    riskChart.update();
-}
-
-// Update the reflexivity chart with new data
-function updateReflexivityChart(data) {
-    try {
-        reflexivityChart.data.labels = data.timestamps;
-        reflexivityChart.data.datasets[0].data = data.reflexivity_indicator || [];
-        reflexivityChart.update();
-    } catch (error) {
-        console.error('Error updating reflexivity chart:', error);
-    }
-}
-
-// Update market sentiment indicators
-function updateMarketSentiment(symbol) {
-    if (!symbolsData[symbol] || !symbolsData[symbol].timestamps || symbolsData[symbol].timestamps.length === 0) {
+// 更新风险指标和市场情绪显示
+function updateRiskIndicators(symbol, data) {
+    console.log('更新风险指标显示...');
+    
+    if (!data || !data.timestamps || data.timestamps.length === 0) {
+        console.warn('没有可用数据来更新风险指标');
         return;
     }
     
-    // Get the latest values
-    const lastIndex = symbolsData[symbol].timestamps.length - 1;
-    const volaxivity = symbolsData[symbol].volaxivity[lastIndex];
-    const volatilitySkew = symbolsData[symbol].volatility_skew[lastIndex];
-    const putCallRatio = symbolsData[symbol].put_call_ratio[lastIndex];
-    const reflexivity = symbolsData[symbol].reflexivity_indicator[lastIndex];
+    // 获取最新的数据点
+    const lastIndex = data.timestamps.length - 1;
+    const volaxivity = data.volaxivity ? data.volaxivity[lastIndex] : null;
+    const volatilitySkew = data.volatility_skew ? data.volatility_skew[lastIndex] : null;
+    const putCallRatio = data.put_call_ratio ? data.put_call_ratio[lastIndex] : null;
+    const reflexivity = data.reflexivity_indicator ? data.reflexivity_indicator[lastIndex] : null;
     
-    // Update the values in the UI
-    document.getElementById('volaxivity-value').textContent = volaxivity ? volaxivity.toFixed(2) : 'N/A';
-    document.getElementById('volatility-skew-value').textContent = volatilitySkew ? volatilitySkew.toFixed(2) : 'N/A';
-    document.getElementById('put-call-ratio-value').textContent = putCallRatio ? putCallRatio.toFixed(2) : 'N/A';
-    document.getElementById('reflexivity-value').textContent = reflexivity ? (reflexivity * 100).toFixed(2) + '%' : 'N/A';
+    // 更新UI中的值
+    updateElementText('volaxivity-value', volaxivity ? volaxivity.toFixed(2) : 'N/A');
+    updateElementText('volatility-skew-value', volatilitySkew ? volatilitySkew.toFixed(2) : 'N/A');
+    updateElementText('put-call-ratio-value', putCallRatio ? putCallRatio.toFixed(2) : 'N/A');
+    updateElementText('reflexivity-value', reflexivity ? (reflexivity * 100).toFixed(2) + '%' : 'N/A');
     
-    // Determine market sentiment (simplified)
+    // 确定市场情绪（简化版本）
     let riskOffSignals = 0;
     
     if (volaxivity > 25) riskOffSignals++;
@@ -343,49 +356,50 @@ function updateMarketSentiment(symbol) {
     
     const marketSentiment = riskOffSignals >= 2 ? 'risk-off' : 'risk-on';
     
-    // Find translations in DOM
-    const translatedLabels = {};
-    document.querySelectorAll('[data-sentiment]').forEach(el => {
-        translatedLabels[el.dataset.sentiment] = el.textContent;
-    });
+    // 查找翻译标签
+    const riskOnText = document.querySelector('[data-sentiment="risk-on"]')?.textContent || 'Risk-On (Bullish)';
+    const riskOffText = document.querySelector('[data-sentiment="risk-off"]')?.textContent || 'Risk-Off (Bearish)';
     
-    // Get translated sentiment text
-    let sentimentText;
-    if (marketSentiment === 'risk-on') {
-        // Try to find the translation in our DOM, fallback to English
-        sentimentText = translatedLabels['risk-on'] || 'Risk-On (Bullish)';
-    } else {
-        sentimentText = translatedLabels['risk-off'] || 'Risk-Off (Bearish)';
-    }
+    // 更新市场情绪文本
+    const sentimentText = marketSentiment === 'risk-on' ? riskOnText : riskOffText;
+    updateElementText('market-sentiment', sentimentText);
     
-    // Update sentiment indicator
+    // 更新情绪颜色
     const sentimentElement = document.getElementById('market-sentiment');
-    sentimentElement.textContent = sentimentText;
-    
-    // Update sentiment color
-    if (marketSentiment === 'risk-on') {
-        sentimentElement.classList.remove('text-danger');
-        sentimentElement.classList.add('text-success');
-    } else {
-        sentimentElement.classList.remove('text-success');
-        sentimentElement.classList.add('text-danger');
+    if (sentimentElement) {
+        if (marketSentiment === 'risk-on') {
+            sentimentElement.classList.remove('text-danger');
+            sentimentElement.classList.add('text-success');
+        } else {
+            sentimentElement.classList.remove('text-success');
+            sentimentElement.classList.add('text-danger');
+        }
     }
     
-    // Update risk level indicators
+    // 更新风险等级指示器
     updateRiskLevelIndicator('volaxivity-indicator', volaxivity, [20, 30, 40]);
     updateRiskLevelIndicator('skew-indicator', volatilitySkew, [0.5, 1.0, 1.5]);
     updateRiskLevelIndicator('pcr-indicator', putCallRatio, [1.2, 1.5, 2.0]);
     updateRiskLevelIndicator('reflexivity-indicator', reflexivity, [0.3, 0.5, 0.7]);
 }
 
-// Update a risk level indicator based on thresholds
+// 更新元素文本内容的辅助函数
+function updateElementText(elementId, text) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = text;
+    }
+}
+
+// 根据阈值更新风险等级指示器
 function updateRiskLevelIndicator(elementId, value, thresholds) {
     const indicator = document.getElementById(elementId);
+    if (!indicator) return;
     
-    // Remove previous classes
-    indicator.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info');
+    // 移除之前的类
+    indicator.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info', 'bg-secondary');
     
-    // Determine risk level
+    // 确定风险等级
     if (value === null || value === undefined) {
         indicator.classList.add('bg-secondary');
         indicator.style.width = '0%';
@@ -404,8 +418,10 @@ function updateRiskLevelIndicator(elementId, value, thresholds) {
     }
 }
 
-// Acknowledge an alert
+// 确认警报
 function acknowledgeAlert(alertId) {
+    console.log('确认警报:', alertId);
+    
     fetch('/api/alerts/acknowledge', {
         method: 'POST',
         headers: {
@@ -416,63 +432,33 @@ function acknowledgeAlert(alertId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Remove the alert from the UI
+            // 从UI中移除警报元素
             const alertElement = document.querySelector(`.alert-item[data-alert-id="${alertId}"]`);
             if (alertElement) {
                 alertElement.remove();
             }
             
-            // Show success message
-            showToast('Alert acknowledged', 'success');
+            // 显示成功消息
+            showToast('警报已确认', 'success');
         } else {
-            showToast('Error acknowledging alert: ' + data.message, 'danger');
+            showToast('确认警报失败: ' + (data.message || '未知错误'), 'danger');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        showToast('Error connecting to server', 'danger');
+        console.error('确认警报出错:', error);
+        showToast('连接服务器出错', 'danger');
     });
 }
 
-// Refresh the dashboard data
-function refreshDashboard() {
-    const selectedSymbol = document.getElementById('symbol-selector').value;
-    const activePeriodButton = document.querySelector('.time-period-selector button.active');
-    const days = activePeriodButton ? parseInt(activePeriodButton.getAttribute('data-days')) : 7;
-    
-    updateCharts(selectedSymbol, days);
-    
-    // Reload alerts section
-    fetch('/alerts')
-        .then(response => response.text())
-        .then(html => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            
-            // Get the alerts container from the loaded HTML
-            const newAlertsContainer = doc.querySelector('#active-alerts');
-            
-            if (newAlertsContainer) {
-                // Replace the current alerts container
-                document.getElementById('active-alerts').innerHTML = newAlertsContainer.innerHTML;
-                
-                // Reattach event listeners
-                document.querySelectorAll('.acknowledge-alert').forEach(button => {
-                    button.addEventListener('click', function() {
-                        const alertId = this.getAttribute('data-alert-id');
-                        acknowledgeAlert(alertId);
-                    });
-                });
-            }
-        })
-        .catch(error => {
-            console.error('Error refreshing alerts:', error);
-        });
-}
-
-// Show a toast notification
+// 显示弹出消息
 function showToast(message, type = 'info') {
+    console.log(`显示消息 [${type}]:`, message);
+    
     const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        console.warn('找不到Toast容器元素');
+        return;
+    }
     
     const toast = document.createElement('div');
     toast.className = `toast align-items-center text-white bg-${type} border-0`;
@@ -491,6 +477,7 @@ function showToast(message, type = 'info') {
     
     toastContainer.appendChild(toast);
     
+    // 使用Bootstrap的Toast组件
     const bsToast = new bootstrap.Toast(toast, {
         autohide: true,
         delay: 3000
@@ -498,7 +485,7 @@ function showToast(message, type = 'info') {
     
     bsToast.show();
     
-    // Remove the toast from the DOM after it's hidden
+    // 隐藏后从DOM中移除
     toast.addEventListener('hidden.bs.toast', function() {
         toastContainer.removeChild(toast);
     });

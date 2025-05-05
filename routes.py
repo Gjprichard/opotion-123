@@ -39,30 +39,41 @@ def dashboard():
 
 @app.route('/api/dashboard/data')
 def dashboard_data():
-    symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
-    days = int(request.args.get('days', 30))
-    
-    # Get risk indicators for the past N days
-    from_date = datetime.utcnow() - timedelta(days=days)
-    risk_data = RiskIndicator.query.filter(
-        RiskIndicator.symbol == symbol,
-        RiskIndicator.timestamp > from_date
-    ).order_by(RiskIndicator.timestamp).all()
-    
-    # Format the data for chart.js
-    timestamps = [r.timestamp.strftime('%Y-%m-%d %H:%M') for r in risk_data]
-    volaxivity = [r.volaxivity for r in risk_data]
-    volatility_skew = [r.volatility_skew for r in risk_data]
-    put_call_ratio = [r.put_call_ratio for r in risk_data]
-    reflexivity = [r.reflexivity_indicator for r in risk_data]
-    
-    return jsonify({
-        'timestamps': timestamps,
-        'volaxivity': volaxivity,
-        'volatility_skew': volatility_skew,
-        'put_call_ratio': put_call_ratio,
-        'reflexivity_indicator': reflexivity
-    })
+    try:
+        symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
+        days = int(request.args.get('days', 30))
+        
+        app.logger.info(f"Fetching dashboard data for symbol={symbol}, days={days}")
+        
+        # Get risk indicators for the past N days
+        from_date = datetime.utcnow() - timedelta(days=days)
+        risk_data = RiskIndicator.query.filter(
+            RiskIndicator.symbol == symbol,
+            RiskIndicator.timestamp > from_date
+        ).order_by(RiskIndicator.timestamp).all()
+        
+        app.logger.info(f"Found {len(risk_data)} risk indicator records for {symbol}")
+        
+        # Format the data for chart.js
+        timestamps = [r.timestamp.strftime('%Y-%m-%d %H:%M') for r in risk_data]
+        volaxivity = [float(r.volaxivity) if r.volaxivity is not None else None for r in risk_data]
+        volatility_skew = [float(r.volatility_skew) if r.volatility_skew is not None else None for r in risk_data]
+        put_call_ratio = [float(r.put_call_ratio) if r.put_call_ratio is not None else None for r in risk_data]
+        reflexivity = [float(r.reflexivity_indicator) if r.reflexivity_indicator is not None else None for r in risk_data]
+        
+        return jsonify({
+            'timestamps': timestamps,
+            'volaxivity': volaxivity,
+            'volatility_skew': volatility_skew,
+            'put_call_ratio': put_call_ratio,
+            'reflexivity_indicator': reflexivity
+        })
+    except Exception as e:
+        app.logger.error(f"Error in dashboard_data: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'An error occurred while fetching dashboard data',
+            'message': str(e)
+        }), 500
 
 @app.route('/alerts')
 def alerts_view():
