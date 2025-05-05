@@ -109,8 +109,8 @@ def cleanup_old_data():
 def get_base_price_for_symbol(symbol):
     """Return a realistic base price for the given symbol"""
     prices = {
-        'BTC': 65000.0,  # Bitcoin price in USD
-        'ETH': 3500.0    # Ethereum price in USD
+        'BTC': 92500.0,  # Bitcoin price in USD
+        'ETH': 3800.0    # Ethereum price in USD
     }
     return prices.get(symbol, 100.0)
 
