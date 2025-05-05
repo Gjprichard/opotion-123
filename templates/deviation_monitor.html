@@ -45,6 +45,65 @@
                     </div>
                 </div>
                 
+                <!-- 交易所比较分析面板 -->
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <div class="card mb-3">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold text-info">交易所异常比较分析</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <h6 class="text-center mb-2">Deribit</h6>
+                                        <div class="exchange-stats" id="deribit-stats">
+                                            <div class="progress mb-2" style="height: 25px;">
+                                                <div class="progress-bar bg-success" id="deribit-call-bar" style="width: 50%;">看涨</div>
+                                                <div class="progress-bar bg-danger" id="deribit-put-bar" style="width: 50%;">看跌</div>
+                                            </div>
+                                            <div class="d-flex justify-content-between mt-1">
+                                                <small>看涨成交量: <span id="deribit-call-volume">--</span></small>
+                                                <small>看跌成交量: <span id="deribit-put-volume">--</span></small>
+                                                <small>比率: <span id="deribit-ratio">--</span></small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-4">
+                                        <h6 class="text-center mb-2">Binance</h6>
+                                        <div class="exchange-stats" id="binance-stats">
+                                            <div class="progress mb-2" style="height: 25px;">
+                                                <div class="progress-bar bg-success" id="binance-call-bar" style="width: 50%;">看涨</div>
+                                                <div class="progress-bar bg-danger" id="binance-put-bar" style="width: 50%;">看跌</div>
+                                            </div>
+                                            <div class="d-flex justify-content-between mt-1">
+                                                <small>看涨成交量: <span id="binance-call-volume">--</span></small>
+                                                <small>看跌成交量: <span id="binance-put-volume">--</span></small>
+                                                <small>比率: <span id="binance-ratio">--</span></small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-4">
+                                        <h6 class="text-center mb-2">OKX</h6>
+                                        <div class="exchange-stats" id="okx-stats">
+                                            <div class="progress mb-2" style="height: 25px;">
+                                                <div class="progress-bar bg-success" id="okx-call-bar" style="width: 50%;">看涨</div>
+                                                <div class="progress-bar bg-danger" id="okx-put-bar" style="width: 50%;">看跌</div>
+                                            </div>
+                                            <div class="d-flex justify-content-between mt-1">
+                                                <small>看涨成交量: <span id="okx-call-volume">--</span></small>
+                                                <small>看跌成交量: <span id="okx-put-volume">--</span></small>
+                                                <small>比率: <span id="okx-ratio">--</span></small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- 多空成交量统计信息 -->
                 <div class="row mt-3">
                     <div class="col-md-12">

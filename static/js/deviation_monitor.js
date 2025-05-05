@@ -1688,6 +1688,9 @@ const DataService = {
         
         // 更新表格
         this.updateDeviationTable(data);
+        
+        // 获取多空成交量分析数据
+        DataManager.fetchVolumeAnalysisData();
     }
 };
 
@@ -1824,6 +1827,76 @@ const VolumeAnalysisModule = {
         
         // 更新成交量趋势图
         this.updateVolumeTrendChart(this.prepareVolumeTrendChartData(data));
+        
+        // 更新交易所比较面板
+        this.updateExchangeComparisonPanel(data);
+    },
+    
+    /**
+     * 更新交易所比较面板
+     * @param {Object} data - 多空成交量分析数据
+     */
+    updateExchangeComparisonPanel(data) {
+        if (!data || !data.exchange_data) return;
+        
+        const exchangeData = data.exchange_data;
+        
+        // 更新Deribit数据
+        if (exchangeData.deribit) {
+            this.updateExchangeStats('deribit', exchangeData.deribit);
+        }
+        
+        // 更新Binance数据
+        if (exchangeData.binance) {
+            this.updateExchangeStats('binance', exchangeData.binance);
+        }
+        
+        // 更新OKX数据
+        if (exchangeData.okx) {
+            this.updateExchangeStats('okx', exchangeData.okx);
+        }
+    },
+    
+    /**
+     * 更新单个交易所统计面板
+     * @param {string} exchange - 交易所ID
+     * @param {Object} data - 交易所数据
+     */
+    updateExchangeStats(exchange, data) {
+        if (!data) return;
+        
+        const callVolume = data.call_volume || 0;
+        const putVolume = data.put_volume || 0;
+        const ratio = data.ratio || 1;
+        const totalVolume = callVolume + putVolume;
+        const callPercent = totalVolume > 0 ? (callVolume / totalVolume) * 100 : 50;
+        const putPercent = totalVolume > 0 ? (putVolume / totalVolume) * 100 : 50;
+        
+        // 更新进度条
+        const callBar = document.getElementById(`${exchange}-call-bar`);
+        const putBar = document.getElementById(`${exchange}-put-bar`);
+        
+        if (callBar && putBar) {
+            callBar.style.width = `${callPercent}%`;
+            putBar.style.width = `${putPercent}%`;
+        }
+        
+        // 更新数据显示
+        document.getElementById(`${exchange}-call-volume`).textContent = DataUtils.formatNumber(callVolume);
+        document.getElementById(`${exchange}-put-volume`).textContent = DataUtils.formatNumber(putVolume);
+        document.getElementById(`${exchange}-ratio`).textContent = DataUtils.formatNumber(ratio, 2);
+        
+        // 设置比率颜色
+        const ratioElement = document.getElementById(`${exchange}-ratio`);
+        if (ratioElement) {
+            if (ratio > 1.2) {
+                ratioElement.className = 'text-success';  // 偏多
+            } else if (ratio < 0.8) {
+                ratioElement.className = 'text-danger';   // 偏空
+            } else {
+                ratioElement.className = '';  // 中性
+            }
+        }
     },
     
     /**
