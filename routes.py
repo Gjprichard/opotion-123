@@ -61,7 +61,7 @@ def dashboard_data():
         'volaxivity': volaxivity,
         'volatility_skew': volatility_skew,
         'put_call_ratio': put_call_ratio,
-        'reflexivity': reflexivity
+        'reflexivity_indicator': reflexivity
     })
 
 @app.route('/alerts')

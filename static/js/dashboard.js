@@ -315,7 +315,7 @@ function updateMarketSentiment(symbol) {
     const volaxivity = symbolsData[symbol].volaxivity[lastIndex];
     const volatilitySkew = symbolsData[symbol].volatility_skew[lastIndex];
     const putCallRatio = symbolsData[symbol].put_call_ratio[lastIndex];
-    const reflexivity = symbolsData[symbol].reflexivity[lastIndex];
+    const reflexivity = symbolsData[symbol].reflexivity_indicator[lastIndex];
     
     // Update the values in the UI
     document.getElementById('volaxivity-value').textContent = volaxivity ? volaxivity.toFixed(2) : 'N/A';
