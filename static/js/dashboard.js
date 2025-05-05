@@ -13,16 +13,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化事件监听器
     setupEventListeners();
     
-    // 获取当前选择的交易对
+    // 获取当前选择的交易对和时间周期
     const selectedSymbol = document.getElementById('symbol-selector').value || 'BTC';
+    const selectedTimePeriod = document.getElementById('time-period-selector').value || '4h';
     
     // 初始化图表
-    loadDashboardData(selectedSymbol, 30);
+    loadDashboardData(selectedSymbol, 30, selectedTimePeriod);
     
     // 设置自动刷新（每分钟）
     setInterval(function() {
         const currentSymbol = document.getElementById('symbol-selector').value || 'BTC';
-        loadDashboardData(currentSymbol, 30);
+        const currentTimePeriod = document.getElementById('time-period-selector').value || '4h';
+        loadDashboardData(currentSymbol, 30, currentTimePeriod);
     }, 60000);
 });
 
@@ -35,11 +37,22 @@ function setupEventListeners() {
     if (symbolSelector) {
         symbolSelector.addEventListener('change', function() {
             const symbol = this.value;
-            loadDashboardData(symbol, 30);
+            const timePeriod = document.getElementById('time-period-selector').value || '4h';
+            loadDashboardData(symbol, 30, timePeriod);
         });
     }
     
-    // 时间周期选择器
+    // 时间周期选择器变化时更新数据
+    const timePeriodSelector = document.getElementById('time-period-selector');
+    if (timePeriodSelector) {
+        timePeriodSelector.addEventListener('change', function() {
+            const symbol = document.getElementById('symbol-selector').value || 'BTC';
+            const timePeriod = this.value;
+            loadDashboardData(symbol, 30, timePeriod);
+        });
+    }
+    
+    // 历史图表的时间周期按钮
     const timeButtons = document.querySelectorAll('.time-period-selector button');
     if (timeButtons.length > 0) {
         timeButtons.forEach(button => {
@@ -53,7 +66,8 @@ function setupEventListeners() {
                 // 获取天数和符号并更新图表
                 const days = parseInt(this.getAttribute('data-days')) || 30;
                 const symbol = document.getElementById('symbol-selector').value || 'BTC';
-                loadDashboardData(symbol, days);
+                const timePeriod = document.getElementById('time-period-selector').value || '4h';
+                loadDashboardData(symbol, days, timePeriod);
             });
         });
     }
@@ -67,6 +81,7 @@ function setupEventListeners() {
             this.disabled = true;
             
             const symbol = document.getElementById('symbol-selector').value || 'BTC';
+            const timePeriod = document.getElementById('time-period-selector').value || '4h';
             
             // 调用API刷新数据
             fetch('/api/data/refresh', {
@@ -80,7 +95,7 @@ function setupEventListeners() {
             .then(data => {
                 if (data.success) {
                     // 刷新成功后重新加载仪表盘数据
-                    loadDashboardData(symbol, 30);
+                    loadDashboardData(symbol, 30, timePeriod);
                     showToast('数据刷新成功', 'success');
                 } else {
                     showToast('刷新数据失败: ' + (data.message || '未知错误'), 'danger');
@@ -108,8 +123,8 @@ function setupEventListeners() {
 }
 
 // 加载仪表盘数据
-function loadDashboardData(symbol, days = 30) {
-    console.log(`加载${symbol}的最近${days}天数据...`);
+function loadDashboardData(symbol, days = 30, timePeriod = '4h') {
+    console.log(`加载${symbol}的最近${days}天数据，时间周期：${timePeriod}...`);
     
     // 显示加载指示器
     const riskChartContainer = document.getElementById('risk-chart-container');
@@ -123,8 +138,8 @@ function loadDashboardData(symbol, days = 30) {
         reflexivityChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     }
     
-    // 调用API获取数据
-    fetch(`/api/dashboard/data?symbol=${symbol}&days=${days}`)
+    // 调用API获取数据，包含时间周期
+    fetch(`/api/dashboard/data?symbol=${symbol}&days=${days}&time_period=${timePeriod}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP错误! 状态: ${response.status}`);

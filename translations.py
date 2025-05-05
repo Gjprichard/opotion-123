@@ -28,6 +28,14 @@ translations = {
         'en': 'Language',
         'zh': '语言'
     },
+    'time_period': {
+        'en': 'Time Period',
+        'zh': '时间周期'
+    },
+    'symbol': {
+        'en': 'Symbol',
+        'zh': '交易对'
+    },
     
     # Risk indicators
     'volaxivity': {

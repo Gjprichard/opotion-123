@@ -9,7 +9,17 @@
     <div class="col-md-6 text-end">
         <div class="d-flex justify-content-end">
             <div class="me-3">
-                <label for="symbol-selector" class="form-label">Select Symbol</label>
+                <label for="time-period-selector" class="form-label">{{ t('time_period') }}</label>
+                <select id="time-period-selector" class="form-select form-select-sm">
+                    {% for period_key, period_info in time_periods.items() %}
+                    <option value="{{ period_key }}" {% if period_key == current_time_period %}selected{% endif %}>
+                        {{ period_info.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="me-3">
+                <label for="symbol-selector" class="form-label">{{ t('symbol') }}</label>
                 <select id="symbol-selector" class="form-select form-select-sm">
                     {% for symbol in symbols %}
                     <option value="{{ symbol }}">{{ t(symbol.lower()) if symbol.lower() in ['btc', 'eth'] else symbol }}</option>
