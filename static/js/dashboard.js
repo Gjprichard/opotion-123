@@ -362,12 +362,53 @@ function updateRiskIndicators(symbol, data) {
     updateElementText('put-call-ratio-value', putCallRatio ? putCallRatio.toFixed(2) : 'N/A');
     updateElementText('reflexivity-value', reflexivity ? (reflexivity * 100).toFixed(2) + '%' : 'N/A');
     
-    // 确定市场情绪（简化版本）
+    // 确定市场情绪（根据选择的时间周期设置不同的阈值）
     let riskOffSignals = 0;
+    let timePeriod = document.getElementById('time-period-selector').value || '4h';
     
-    if (volaxivity > 25) riskOffSignals++;
-    if (putCallRatio > 1.2) riskOffSignals++;
-    if (reflexivity > 0.5) riskOffSignals++;
+    // 根据时间周期设置不同的阈值
+    let volaxivityThreshold, pcrThreshold, reflexivityThreshold;
+    
+    switch(timePeriod) {
+        case '15m':
+            volaxivityThreshold = 20;
+            pcrThreshold = 1.1;
+            reflexivityThreshold = 0.3;
+            break;
+        case '1h':
+            volaxivityThreshold = 22;
+            pcrThreshold = 1.15;
+            reflexivityThreshold = 0.35;
+            break;
+        case '4h':
+            volaxivityThreshold = 25;
+            pcrThreshold = 1.2;
+            reflexivityThreshold = 0.5;
+            break;
+        case '1d':
+            volaxivityThreshold = 28;
+            pcrThreshold = 1.25;
+            reflexivityThreshold = 0.6;
+            break;
+        case '7d':
+            volaxivityThreshold = 32;
+            pcrThreshold = 1.3;
+            reflexivityThreshold = 0.7;
+            break;
+        case '30d':
+            volaxivityThreshold = 35;
+            pcrThreshold = 1.35;
+            reflexivityThreshold = 0.8;
+            break;
+        default:
+            volaxivityThreshold = 25;
+            pcrThreshold = 1.2;
+            reflexivityThreshold = 0.5;
+    }
+    
+    if (volaxivity > volaxivityThreshold) riskOffSignals++;
+    if (putCallRatio > pcrThreshold) riskOffSignals++;
+    if (reflexivity > reflexivityThreshold) riskOffSignals++;
     
     const marketSentiment = riskOffSignals >= 2 ? 'risk-off' : 'risk-on';
     
@@ -391,11 +432,58 @@ function updateRiskIndicators(symbol, data) {
         }
     }
     
-    // 更新风险等级指示器
-    updateRiskLevelIndicator('volaxivity-indicator', volaxivity, [20, 30, 40]);
-    updateRiskLevelIndicator('skew-indicator', volatilitySkew, [0.5, 1.0, 1.5]);
-    updateRiskLevelIndicator('pcr-indicator', putCallRatio, [1.2, 1.5, 2.0]);
-    updateRiskLevelIndicator('reflexivity-indicator', reflexivity, [0.3, 0.5, 0.7]);
+    // 更新风险等级指示器 - 根据时间周期设置不同的阈值
+    let volaxivityLevels, skewLevels, pcrLevels, reflexivityLevels;
+    
+    // 根据时间周期设置不同的风险等级阈值
+    switch(timePeriod) {
+        case '15m':
+            volaxivityLevels = [15, 25, 35];
+            skewLevels = [0.3, 0.7, 1.2];
+            pcrLevels = [1.1, 1.4, 1.8];
+            reflexivityLevels = [0.2, 0.4, 0.6];
+            break;
+        case '1h':
+            volaxivityLevels = [18, 28, 38];
+            skewLevels = [0.4, 0.8, 1.3];
+            pcrLevels = [1.15, 1.45, 1.9];
+            reflexivityLevels = [0.25, 0.45, 0.65];
+            break;
+        case '4h':
+            volaxivityLevels = [20, 30, 40];
+            skewLevels = [0.5, 1.0, 1.5];
+            pcrLevels = [1.2, 1.5, 2.0];
+            reflexivityLevels = [0.3, 0.5, 0.7];
+            break;
+        case '1d':
+            volaxivityLevels = [22, 32, 42];
+            skewLevels = [0.6, 1.1, 1.6];
+            pcrLevels = [1.25, 1.55, 2.1];
+            reflexivityLevels = [0.35, 0.55, 0.75];
+            break;
+        case '7d':
+            volaxivityLevels = [25, 35, 45];
+            skewLevels = [0.7, 1.2, 1.7];
+            pcrLevels = [1.3, 1.6, 2.2];
+            reflexivityLevels = [0.4, 0.6, 0.8];
+            break;
+        case '30d':
+            volaxivityLevels = [30, 40, 50];
+            skewLevels = [0.8, 1.3, 1.8];
+            pcrLevels = [1.35, 1.7, 2.3];
+            reflexivityLevels = [0.45, 0.65, 0.85];
+            break;
+        default:
+            volaxivityLevels = [20, 30, 40];
+            skewLevels = [0.5, 1.0, 1.5];
+            pcrLevels = [1.2, 1.5, 2.0];
+            reflexivityLevels = [0.3, 0.5, 0.7];
+    }
+    
+    updateRiskLevelIndicator('volaxivity-indicator', volaxivity, volaxivityLevels);
+    updateRiskLevelIndicator('skew-indicator', volatilitySkew, skewLevels);
+    updateRiskLevelIndicator('pcr-indicator', putCallRatio, pcrLevels);
+    updateRiskLevelIndicator('reflexivity-indicator', reflexivity, reflexivityLevels);
 }
 
 // 更新元素文本内容的辅助函数
