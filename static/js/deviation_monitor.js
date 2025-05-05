@@ -1690,7 +1690,7 @@ const DataService = {
         this.updateDeviationTable(data);
         
         // 获取多空成交量分析数据
-        DataManager.fetchVolumeAnalysisData();
+        VolumeAnalysisModule.fetchVolumeAnalysisData();
     }
 };
 
