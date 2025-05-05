@@ -61,23 +61,23 @@ def calculate_risk_indicators(symbol):
         reflexivity = calculate_reflexivity_indicator(df)
         market_sentiment = determine_market_sentiment(volaxivity, put_call_ratio, reflexivity)
         
-        # Create risk indicator record
+        # Create risk indicator record - convert numpy types to Python native types
         risk_indicator = RiskIndicator(
-            symbol=symbol,
+            symbol=str(symbol),
             timestamp=latest_time,
-            volaxivity=volaxivity,
-            volatility_skew=volatility_skew,
-            put_call_ratio=put_call_ratio,
-            market_sentiment=market_sentiment,
-            reflexivity_indicator=reflexivity
+            volaxivity=float(volaxivity),
+            volatility_skew=float(volatility_skew),
+            put_call_ratio=float(put_call_ratio),
+            market_sentiment=str(market_sentiment),
+            reflexivity_indicator=float(reflexivity)
         )
         
         # Calculate crypto-specific risk indicators if applicable
         if symbol in ['BTC', 'ETH']:
             crypto_risk = get_crypto_specific_risk(symbol, df)
             if crypto_risk:
-                risk_indicator.funding_rate = crypto_risk['funding_rate']
-                risk_indicator.liquidation_risk = crypto_risk['liquidation_risk']
+                risk_indicator.funding_rate = float(crypto_risk['funding_rate'])
+                risk_indicator.liquidation_risk = float(crypto_risk['liquidation_risk'])
                 logger.info(f"Added crypto-specific indicators for {symbol}: Funding Rate={crypto_risk['funding_rate']:.4f}, Liquidation Risk={crypto_risk['liquidation_risk']:.2f}")
         
         db.session.add(risk_indicator)
