@@ -12,11 +12,13 @@ logger = logging.getLogger(__name__)
 
 def fetch_latest_option_data(symbol):
     """
-    Fetch the latest option data for a given symbol from Deribit API
+    Fetch the latest option data for a given symbol from multiple exchanges
     and store in the database.
+    
+    支持从Deribit, Binance, OKX获取期权数据
     """
     try:
-        logger.info(f"Fetching latest option data for {symbol} from Deribit API")
+        logger.info(f"Fetching latest option data for {symbol} from supported exchanges")
         
         # 检查是否应该使用实时数据
         from app import db
@@ -30,33 +32,72 @@ def fetch_latest_option_data(symbol):
             logger.info(f"Real data is disabled, using simulation for {symbol}")
             return fallback_option_data(symbol)
         
-        # 检查是否有有效的API凭证
-        api_credential = ApiCredential.query.filter_by(api_name='deribit', is_active=True).first()
+        # 检查系统中是否启用了特定交易所
+        enabled_exchanges = []
+        for exchange_id in ['deribit', 'binance', 'okx']:
+            exchange_setting = SystemSetting.query.filter_by(
+                setting_name=f'enable_{exchange_id}'
+            ).first()
+            
+            if exchange_setting and exchange_setting.get_typed_value():
+                enabled_exchanges.append(exchange_id)
+        
+        # 如果没有启用任何交易所，默认启用Deribit
+        if not enabled_exchanges:
+            enabled_exchanges = ['deribit']
+            
+        logger.info(f"Fetching {symbol} option data from exchanges: {', '.join(enabled_exchanges)}")
         
         # 从CCXT集成的API获取当前的期权市场数据
-        from services.exchange_api_ccxt import set_api_credentials, get_option_market_data
+        from services.exchange_api_ccxt import set_api_credentials, get_option_market_data, get_all_exchanges_data
         
-        # 如果有API凭证，设置它们
-        if api_credential:
-            set_api_credentials(api_credential.api_key, api_credential.api_secret)
+        # 设置各交易所的API凭证
+        for exchange_id in enabled_exchanges:
+            api_credential = ApiCredential.query.filter_by(
+                api_name=exchange_id, 
+                is_active=True
+            ).first()
+            
+            if api_credential:
+                set_api_credentials(
+                    api_key=api_credential.api_key, 
+                    api_secret=api_credential.api_secret, 
+                    exchange_id=exchange_id
+                )
+                logger.info(f"Set API credentials for {exchange_id}")
         
-        # 获取期权市场数据
-        option_data_list = get_option_market_data(symbol)
+        # 获取所有启用交易所的数据
+        all_option_data = []
+        for exchange_id in enabled_exchanges:
+            try:
+                exchange_data = get_option_market_data(symbol, exchange_id)
+                if exchange_data:
+                    logger.info(f"Received {len(exchange_data)} option contracts for {symbol} from {exchange_id}")
+                    all_option_data.extend(exchange_data)
+                else:
+                    logger.warning(f"No option data received from {exchange_id} for {symbol}")
+            except Exception as e:
+                logger.error(f"Error fetching {symbol} data from {exchange_id}: {str(e)}")
         
-        if not option_data_list:
-            logger.warning(f"No option data received from API for {symbol}, using fallback data")
+        # 如果所有交易所都没有数据，使用备用模拟数据
+        if not all_option_data:
+            logger.warning(f"No option data received from any exchange for {symbol}, using fallback data")
             return fallback_option_data(symbol)
         
-        logger.info(f"Received {len(option_data_list)} option contracts for {symbol}")
+        logger.info(f"Total {len(all_option_data)} option contracts received for {symbol} from all exchanges")
         
         # 将API数据转换为OptionData模型对象
         new_records = []
-        for data in option_data_list:
+        for data in all_option_data:
             # 将Unix时间戳转换为日期对象
             if isinstance(data["expiration_date"], int):
                 expiration_date = datetime.fromtimestamp(data["expiration_date"] / 1000).date()
             else:
                 expiration_date = data["expiration_date"]
+            
+            # 处理可能的None值
+            if expiration_date is None:
+                continue  # 跳过没有到期日的记录
                 
             # 转换为OptionData对象
             option = OptionData(
@@ -68,12 +109,14 @@ def fetch_latest_option_data(symbol):
                 option_price=float(data["option_price"]),
                 volume=int(data.get("volume", 0) or 0),
                 open_interest=int(data.get("open_interest", 0) or 0),
-                implied_volatility=float(data["implied_volatility"]) if data.get("implied_volatility") else None,
-                delta=float(data["delta"]) if data.get("delta") else None,
-                gamma=float(data["gamma"]) if data.get("gamma") else None,
-                theta=float(data["theta"]) if data.get("theta") else None,
-                vega=float(data["vega"]) if data.get("vega") else None,
-                timestamp=data.get("timestamp", datetime.utcnow())
+                implied_volatility=float(data["implied_volatility"]) if data.get("implied_volatility") is not None else None,
+                delta=float(data["delta"]) if data.get("delta") is not None else None,
+                gamma=float(data["gamma"]) if data.get("gamma") is not None else None,
+                theta=float(data["theta"]) if data.get("theta") is not None else None,
+                vega=float(data["vega"]) if data.get("vega") is not None else None,
+                timestamp=data.get("timestamp", datetime.utcnow()),
+                # 添加交易所信息
+                exchange=data.get("exchange", "deribit")  # 默认为deribit以兼容旧数据
             )
             new_records.append(option)
         
@@ -95,6 +138,8 @@ def fetch_latest_option_data(symbol):
 def fallback_option_data(symbol):
     """
     仅当API连接失败时使用模拟数据作为备选方案
+    
+    支持生成多交易所数据 (Deribit, Binance, OKX)
     """
     try:
         logger.warning(f"Using fallback simulation for {symbol} option data")
@@ -123,25 +168,63 @@ def fallback_option_data(symbol):
         # 生成执行价序列
         strikes = np.linspace(min_strike, max_strike, 10)
         
-        # 为每个组合生成期权数据
+        # 为每个交易所生成期权数据
         timestamp = datetime.utcnow()
         new_records = []
+        exchanges = ['deribit', 'binance', 'okx']
         
-        for expiration in expirations:
-            days_to_expiry = (expiration - current_date).days
+        # 检查系统设置中启用的交易所
+        from models import SystemSetting
+        enabled_exchanges = []
+        
+        for exchange_id in exchanges:
+            exchange_setting = SystemSetting.query.filter_by(
+                setting_name=f'enable_{exchange_id}'
+            ).first()
             
-            for strike in strikes:
-                # 生成看涨期权
-                call_option = generate_option_data(
-                    symbol, expiration, strike, 'call', current_price, days_to_expiry, timestamp
-                )
-                new_records.append(call_option)
+            if exchange_setting and exchange_setting.get_typed_value():
+                enabled_exchanges.append(exchange_id)
+        
+        # 如果没有启用的交易所，默认使用全部
+        if not enabled_exchanges:
+            enabled_exchanges = exchanges
+            
+        logger.info(f"生成{symbol}在以下交易所的模拟数据: {', '.join(enabled_exchanges)}")
+        
+        for exchange in enabled_exchanges:
+            for expiration in expirations:
+                days_to_expiry = (expiration - current_date).days
                 
-                # 生成看跌期权
-                put_option = generate_option_data(
-                    symbol, expiration, strike, 'put', current_price, days_to_expiry, timestamp
-                )
-                new_records.append(put_option)
+                # 为每个交易所稍微调整价格和波动率，以产生差异
+                # 这模拟了不同交易所之间的价格差异
+                if exchange == 'binance':
+                    price_adjustment = 1.005  # Binance价格偏高0.5%
+                    vol_adjustment = 0.95    # Binance波动率偏低5%
+                elif exchange == 'okx':
+                    price_adjustment = 0.995  # OKX价格偏低0.5%
+                    vol_adjustment = 1.05    # OKX波动率偏高5%
+                else:  # deribit
+                    price_adjustment = 1.0    # Deribit价格作为基准
+                    vol_adjustment = 1.0     # Deribit波动率作为基准
+                
+                exchange_price = current_price * price_adjustment
+                
+                for strike in strikes:
+                    # 生成看涨期权
+                    call_option = generate_option_data(
+                        symbol, expiration, strike, 'call', 
+                        exchange_price, days_to_expiry, timestamp,
+                        exchange=exchange, vol_adjustment=vol_adjustment
+                    )
+                    new_records.append(call_option)
+                    
+                    # 生成看跌期权
+                    put_option = generate_option_data(
+                        symbol, expiration, strike, 'put', 
+                        exchange_price, days_to_expiry, timestamp,
+                        exchange=exchange, vol_adjustment=vol_adjustment
+                    )
+                    new_records.append(put_option)
         
         # 保存到数据库
         db.session.bulk_save_objects(new_records)
@@ -201,8 +284,21 @@ def get_base_price_for_symbol(symbol):
     }
     return prices.get(symbol, 100.0)
 
-def generate_option_data(symbol, expiration, strike, option_type, current_price, days_to_expiry, timestamp):
-    """Generate realistic option data based on the Black-Scholes model"""
+def generate_option_data(symbol, expiration, strike, option_type, current_price, days_to_expiry, timestamp, exchange='deribit', vol_adjustment=1.0):
+    """
+    Generate realistic option data based on the Black-Scholes model
+    
+    Parameters:
+    symbol - 标的资产符号，如 'BTC', 'ETH'
+    expiration - 到期日
+    strike - 执行价
+    option_type - 期权类型，'call' 或 'put'
+    current_price - 当前标的资产价格
+    days_to_expiry - 到期天数
+    timestamp - 时间戳
+    exchange - 交易所，'deribit', 'binance', 或 'okx'
+    vol_adjustment - 波动率调整因子，用于模拟不同交易所的波动率差异
+    """
     # Parameters for the simulation
     risk_free_rate = 0.03  # 3% risk-free rate
     dividend_yield = 0.01  # 1% dividend yield
@@ -218,7 +314,8 @@ def generate_option_data(symbol, expiration, strike, option_type, current_price,
     if option_type == 'put':
         skew_factor *= 1.2
     
-    implied_volatility = base_iv + skew_factor
+    # 应用交易所特定的波动率调整
+    implied_volatility = (base_iv + skew_factor) * vol_adjustment
     implied_volatility = max(0.05, min(implied_volatility, 1.0))  # Cap between 5% and 100%
     
     # Calculate option price using Black-Scholes approximation
@@ -233,12 +330,26 @@ def generate_option_data(symbol, expiration, strike, option_type, current_price,
     theta = calculate_theta(current_price, strike, days_to_expiry/365, risk_free_rate, implied_volatility, option_type)
     vega = calculate_vega(current_price, strike, days_to_expiry/365, risk_free_rate, implied_volatility)
     
-    # Generate volume and open interest
+    # Generate volume and open interest with exchange-specific adjustments
     atm_factor = 1.0 - abs(moneyness - 1.0) * 4  # ATM options have higher volume
     atm_factor = max(0.1, atm_factor)
     
-    volume = int(random.uniform(50, 500) * atm_factor)
-    open_interest = int(random.uniform(200, 2000) * atm_factor)
+    # 不同交易所的成交量特点
+    if exchange == 'binance':
+        # Binance成交量较大
+        volume_base = random.uniform(100, 800)
+        oi_base = random.uniform(400, 3000)
+    elif exchange == 'okx':
+        # OKX成交量中等
+        volume_base = random.uniform(80, 600)
+        oi_base = random.uniform(300, 2500)
+    else:  # deribit
+        # Deribit作为基准
+        volume_base = random.uniform(50, 500)
+        oi_base = random.uniform(200, 2000)
+    
+    volume = int(volume_base * atm_factor)
+    open_interest = int(oi_base * atm_factor)
     
     # Create the option data object - convert numpy types to Python native types
     option_data = OptionData(
@@ -255,7 +366,8 @@ def generate_option_data(symbol, expiration, strike, option_type, current_price,
         gamma=float(gamma),
         theta=float(theta),
         vega=float(vega),
-        timestamp=timestamp
+        timestamp=timestamp,
+        exchange=exchange  # 添加交易所信息
     )
     
     return option_data

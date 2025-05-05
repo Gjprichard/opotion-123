@@ -18,9 +18,10 @@ class OptionData(db.Model):
     theta = db.Column(db.Float, nullable=True)
     vega = db.Column(db.Float, nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    exchange = db.Column(db.String(20), default='deribit', nullable=False, index=True)  # 'deribit', 'binance', 'okx'
 
     def __repr__(self):
-        return f'<OptionData {self.symbol} {self.option_type} {self.strike_price} {self.expiration_date}>'
+        return f'<OptionData {self.symbol} {self.option_type} {self.strike_price} {self.expiration_date} {self.exchange}>'
 
 class RiskIndicator(db.Model):
     """Model to store calculated risk indicators"""
