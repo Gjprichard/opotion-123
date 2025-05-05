@@ -2,7 +2,7 @@ modules = ["python-3.11", "postgresql-16", "python3"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["glibcLocales", "libxcrypt", "openssl", "pkg-config", "postgresql", "xsimd"]
+packages = ["glibcLocales", "libxcrypt", "openssl", "pkg-config", "postgresql", "xsimd", "jq"]
 
 [deployment]
 deploymentTarget = "autoscale"
