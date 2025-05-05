@@ -101,6 +101,47 @@
                     </button>
                 </div>
                 
+                <hr class="my-4">
+                
+                <div class="mb-4">
+                    <h5>API Settings</h5>
+                    <p>Configure API credentials for Deribit exchange to fetch real-time market data.</p>
+                    
+                    <form id="api-credentials-form">
+                        <div class="mb-3">
+                            <label for="deribit-api-key" class="form-label">Deribit API Key</label>
+                            <input type="text" class="form-control" id="deribit-api-key" 
+                                   placeholder="Enter your Deribit API key" 
+                                   value="{{ api_credentials.api_key if api_credentials }}">
+                            <div class="form-text">Your Deribit API key. Get one from <a href="https://www.deribit.com/main#/account/api" target="_blank">Deribit API management page</a>.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="deribit-api-secret" class="form-label">Deribit API Secret</label>
+                            <input type="password" class="form-control" id="deribit-api-secret" 
+                                   placeholder="Enter your Deribit API secret"
+                                   value="{{ '••••••••••••••••' if api_credentials and api_credentials.api_secret }}">
+                            <div class="form-text">Your Deribit API secret. Keep this confidential.</div>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="use-real-data" 
+                                   {{ 'checked' if use_real_data }}>
+                            <label class="form-check-label" for="use-real-data">
+                                Use real market data (requires valid API credentials)
+                            </label>
+                        </div>
+                        
+                        <button type="button" id="save-api-settings" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i> Save API Settings
+                        </button>
+                        
+                        <button type="button" id="test-api-connection" class="btn btn-outline-secondary ms-2">
+                            <i class="fas fa-plug me-1"></i> Test Connection
+                        </button>
+                    </form>
+                </div>
+                
                 <hr>
                 
                 <div class="mb-4">
@@ -242,6 +283,16 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshSymbolData(symbol);
     });
     
+    // Save API settings button
+    document.getElementById('save-api-settings').addEventListener('click', function() {
+        saveApiSettings();
+    });
+    
+    // Test API connection button
+    document.getElementById('test-api-connection').addEventListener('click', function() {
+        testApiConnection();
+    });
+    
     // Function to save thresholds
     function saveThresholds(indicator) {
         const attention = parseFloat(document.getElementById(`${indicator}-attention`).value);
@@ -350,6 +401,102 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast(`Data for ${symbol} refreshed successfully`, 'success');
             } else {
                 showToast('Error refreshing data: ' + data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error connecting to server', 'danger');
+        })
+        .finally(() => {
+            // Restore button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+    
+    // Function to save API settings
+    function saveApiSettings() {
+        const apiKey = document.getElementById('deribit-api-key').value.trim();
+        const apiSecret = document.getElementById('deribit-api-secret').value.trim();
+        const useRealData = document.getElementById('use-real-data').checked;
+        
+        // Validate inputs
+        if (useRealData && (apiKey === '' || apiSecret === '')) {
+            showToast('API Key and Secret are required when using real data', 'danger');
+            return;
+        }
+        
+        // Show loading state
+        const button = document.getElementById('save-api-settings');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+        button.disabled = true;
+        
+        // Save the API settings
+        fetch('/api/settings/api', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                api_key: apiKey,
+                api_secret: apiSecret,
+                use_real_data: useRealData
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('API settings saved successfully', 'success');
+            } else {
+                showToast('Error saving API settings: ' + data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error connecting to server', 'danger');
+        })
+        .finally(() => {
+            // Restore button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+    
+    // Function to test API connection
+    function testApiConnection() {
+        const apiKey = document.getElementById('deribit-api-key').value.trim();
+        const apiSecret = document.getElementById('deribit-api-secret').value.trim();
+        
+        // Validate inputs
+        if (apiKey === '' || apiSecret === '') {
+            showToast('API Key and Secret are required to test connection', 'danger');
+            return;
+        }
+        
+        // Show loading state
+        const button = document.getElementById('test-api-connection');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Testing...';
+        button.disabled = true;
+        
+        // Test the API connection
+        fetch('/api/settings/test-api', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                api_key: apiKey,
+                api_secret: apiSecret
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('API connection successful! ' + data.message, 'success');
+            } else {
+                showToast('API connection failed: ' + data.message, 'danger');
             }
         })
         .catch(error => {

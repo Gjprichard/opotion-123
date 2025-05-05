@@ -1,9 +1,9 @@
 import logging
 import numpy as np
 import pandas as pd
+import random
 from datetime import datetime, timedelta
-import random  # For simulating data only
-
+from services.exchange_api import get_option_market_data, get_underlying_price
 from app import db
 from models import OptionData
 from config import Config
@@ -12,31 +12,91 @@ logger = logging.getLogger(__name__)
 
 def fetch_latest_option_data(symbol):
     """
-    Fetch the latest option data for a given symbol and store in the database.
-    In a real implementation, this would connect to a data provider API.
-    For this demo, we'll generate realistic simulated data.
+    Fetch the latest option data for a given symbol from Deribit API
+    and store in the database.
     """
     try:
-        logger.info(f"Fetching latest option data for {symbol}")
+        logger.info(f"Fetching latest option data for {symbol} from Deribit API")
         
-        # Get current date and set expiration date to exactly 30 days
+        # 从Deribit API获取当前的期权市场数据
+        option_data_list = get_option_market_data(symbol)
+        
+        if not option_data_list:
+            logger.warning(f"No option data received from API for {symbol}, using fallback data")
+            return fallback_option_data(symbol)
+        
+        logger.info(f"Received {len(option_data_list)} option contracts for {symbol}")
+        
+        # 将API数据转换为OptionData模型对象
+        new_records = []
+        for data in option_data_list:
+            # 将Unix时间戳转换为日期对象
+            if isinstance(data["expiration_date"], int):
+                expiration_date = datetime.fromtimestamp(data["expiration_date"] / 1000).date()
+            else:
+                expiration_date = data["expiration_date"]
+                
+            # 转换为OptionData对象
+            option = OptionData(
+                symbol=data["symbol"],
+                expiration_date=expiration_date,
+                strike_price=float(data["strike_price"]),
+                option_type=data["option_type"],
+                underlying_price=float(data["underlying_price"]),
+                option_price=float(data["option_price"]),
+                volume=int(data.get("volume", 0) or 0),
+                open_interest=int(data.get("open_interest", 0) or 0),
+                implied_volatility=float(data["implied_volatility"]) if data.get("implied_volatility") else None,
+                delta=float(data["delta"]) if data.get("delta") else None,
+                gamma=float(data["gamma"]) if data.get("gamma") else None,
+                theta=float(data["theta"]) if data.get("theta") else None,
+                vega=float(data["vega"]) if data.get("vega") else None,
+                timestamp=data.get("timestamp", datetime.utcnow())
+            )
+            new_records.append(option)
+        
+        # 保存到数据库
+        db.session.bulk_save_objects(new_records)
+        db.session.commit()
+        
+        # 清理旧数据
+        cleanup_old_data()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error fetching option data from API: {str(e)}")
+        db.session.rollback()
+        # 尝试使用模拟数据作为备选方案
+        return fallback_option_data(symbol)
+
+def fallback_option_data(symbol):
+    """
+    仅当API连接失败时使用模拟数据作为备选方案
+    """
+    try:
+        logger.warning(f"Using fallback simulation for {symbol} option data")
+        
+        # 获取当前日期并设置到期日为30天后
         current_date = datetime.now().date()
         expirations = [
             current_date + timedelta(days=30)
         ]
         
-        # Simulate underlying price
-        base_price = get_base_price_for_symbol(symbol)
-        current_price = base_price * (1 + random.uniform(-0.02, 0.02))
+        # 尝试从API获取标的资产价格，如果失败则使用模拟价格
+        current_price = get_underlying_price(symbol)
+        if not current_price:
+            base_price = get_base_price_for_symbol(symbol)
+            current_price = base_price
         
-        # Calculate strike price range based on config
+        # 计算执行价范围
         min_strike = current_price * (1 - Config.OPTION_STRIKE_RANGE_PCT / 100)
         max_strike = current_price * (1 + Config.OPTION_STRIKE_RANGE_PCT / 100)
         
-        # Generate strikes within range
+        # 生成执行价序列
         strikes = np.linspace(min_strike, max_strike, 10)
         
-        # Now generate option data for each combination
+        # 为每个组合生成期权数据
         timestamp = datetime.utcnow()
         new_records = []
         
@@ -44,29 +104,29 @@ def fetch_latest_option_data(symbol):
             days_to_expiry = (expiration - current_date).days
             
             for strike in strikes:
-                # Generate call option
+                # 生成看涨期权
                 call_option = generate_option_data(
                     symbol, expiration, strike, 'call', current_price, days_to_expiry, timestamp
                 )
                 new_records.append(call_option)
                 
-                # Generate put option
+                # 生成看跌期权
                 put_option = generate_option_data(
                     symbol, expiration, strike, 'put', current_price, days_to_expiry, timestamp
                 )
                 new_records.append(put_option)
         
-        # Save to database
+        # 保存到数据库
         db.session.bulk_save_objects(new_records)
         db.session.commit()
         
-        # Clean up old data
+        # 清理旧数据
         cleanup_old_data()
         
         return True
         
     except Exception as e:
-        logger.error(f"Error fetching option data: {str(e)}")
+        logger.error(f"Error in fallback option data generation: {str(e)}")
         db.session.rollback()
         return False
 
