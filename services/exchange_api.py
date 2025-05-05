@@ -95,19 +95,36 @@ def get_ticker_data(instrument_name):
 def get_underlying_price(symbol):
     """获取标的资产当前价格"""
     try:
-        index_name = f"{symbol.upper()}_USD"
-        url = f"{BASE_URL}/api/v2/public/get_index_price"
-        params = {"index_name": index_name}
+        currency = symbol.upper()
+        # 使用正确的API端点来获取价格
+        url = f"{BASE_URL}/api/v2/public/get_index"
+        params = {"currency": currency}
         
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
         
         if data.get("result"):
-            return data["result"]["index_price"]
+            return data["result"][currency]
         else:
-            logger.error(f"Error fetching underlying price for {symbol}: {data.get('error', 'Unknown error')}")
-            return None
+            # 如果获取索引价格失败，尝试获取ticker价格
+            try:
+                instrument_name = f"{currency}-PERPETUAL"
+                url = f"{BASE_URL}/api/v2/public/ticker"
+                params = {"instrument_name": instrument_name}
+                
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("result"):
+                    return data["result"]["last_price"]
+                else:
+                    logger.error(f"Error fetching ticker price for {symbol}: {data.get('error', 'Unknown error')}")
+                    return None
+            except Exception as e:
+                logger.error(f"Exception fetching ticker price for {symbol}: {str(e)}")
+                return None
     except Exception as e:
         logger.error(f"Exception fetching underlying price for {symbol}: {str(e)}")
         return None

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 
 from app import app, db
-from models import OptionData, RiskIndicator, Alert, AlertThreshold, ScenarioAnalysis, StrikeDeviationMonitor, DeviationAlert
+from models import OptionData, RiskIndicator, Alert, AlertThreshold, ScenarioAnalysis, StrikeDeviationMonitor, DeviationAlert, ApiCredential, SystemSetting
 from config import Config
 from services.data_service import fetch_latest_option_data, fetch_historical_data
 from services.risk_calculator import calculate_risk_indicators, run_scenario_analysis

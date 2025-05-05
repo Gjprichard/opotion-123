@@ -132,3 +132,45 @@ class DeviationAlert(db.Model):
     
     def __repr__(self):
         return f'<DeviationAlert {self.symbol} {self.strike_price} {self.alert_type} {self.time_period}>'
+
+class ApiCredential(db.Model):
+    """Model to store API credentials"""
+    id = db.Column(db.Integer, primary_key=True)
+    api_name = db.Column(db.String(50), nullable=False, unique=True)
+    api_key = db.Column(db.String(100), nullable=False)
+    api_secret = db.Column(db.String(100), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def __repr__(self):
+        return f"<ApiCredential {self.id}: {self.api_name}>"
+        
+class SystemSetting(db.Model):
+    """Model to store system settings"""
+    id = db.Column(db.Integer, primary_key=True)
+    setting_name = db.Column(db.String(50), nullable=False, unique=True)
+    setting_value = db.Column(db.String(255), nullable=False)
+    setting_type = db.Column(db.String(20), nullable=False, default='string')  # string, boolean, integer, float
+    description = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def get_typed_value(self):
+        """Return the value converted to the appropriate type"""
+        if self.setting_type == 'boolean':
+            return self.setting_value.lower() in ('true', 'yes', '1', 't', 'y')
+        elif self.setting_type == 'integer':
+            try:
+                return int(self.setting_value)
+            except ValueError:
+                return 0
+        elif self.setting_type == 'float':
+            try:
+                return float(self.setting_value)
+            except ValueError:
+                return 0.0
+        else:  # string or any other type
+            return self.setting_value
+    
+    def __repr__(self):
+        return f"<SystemSetting {self.setting_name}: {self.setting_value} ({self.setting_type})>"
