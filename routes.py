@@ -413,6 +413,9 @@ def deviation_data_api():
         time_period = request.args.get('time_period', '4h')
         anomaly_only = request.args.get('anomaly_only', 'false').lower() == 'true'
         days = int(request.args.get('days', 7))
+        exchange = request.args.get('exchange', 'deribit')
+        option_type = request.args.get('option_type', '')  # 'call', 'put' 或空字符串表示所有
+        volume_change_filter = float(request.args.get('volume_change_filter', 0))  # 成交量变化过滤器，默认0表示不过滤
         
         # 确保时间周期有效
         if time_period not in Config.TIME_PERIODS:
@@ -423,7 +426,10 @@ def deviation_data_api():
             symbol=symbol,
             time_period=time_period,
             is_anomaly=True if anomaly_only else None,
-            days=days
+            days=days,
+            exchange=exchange,
+            option_type=option_type if option_type else None,
+            volume_change_min=volume_change_filter if volume_change_filter > 0 else None
         )
         
         # 格式化数据
@@ -437,6 +443,7 @@ def deviation_data_api():
                 'market_price': dev.market_price,
                 'deviation_percent': dev.deviation_percent,
                 'option_type': dev.option_type,
+                'exchange': dev.exchange,
                 'expiration_date': dev.expiration_date.strftime('%Y-%m-%d'),
                 'volume': dev.volume,
                 'volume_change_percent': dev.volume_change_percent,
@@ -462,6 +469,8 @@ def deviation_alerts_api():
         symbol = request.args.get('symbol', Config.TRACKED_SYMBOLS[0])
         time_period = request.args.get('time_period', '4h')
         acknowledged = request.args.get('acknowledged')
+        exchange = request.args.get('exchange', 'deribit')
+        option_type = request.args.get('option_type', '')  # 'call', 'put' 或空字符串表示所有
         
         if acknowledged is not None:
             acknowledged = acknowledged.lower() == 'true'
@@ -474,6 +483,8 @@ def deviation_alerts_api():
         alerts = get_deviation_alerts(
             symbol=symbol,
             time_period=time_period,
+            exchange=exchange,
+            option_type=option_type if option_type else None,
             acknowledged=acknowledged
         )
         
@@ -487,6 +498,8 @@ def deviation_alerts_api():
                 'strike_price': alert.strike_price,
                 'market_price': alert.market_price,
                 'deviation_percent': alert.deviation_percent,
+                'option_type': alert.option_type,
+                'exchange': alert.exchange,
                 'alert_type': alert.alert_type,
                 'message': alert.message,
                 'trigger_condition': alert.trigger_condition,
