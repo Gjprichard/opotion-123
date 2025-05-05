@@ -19,12 +19,10 @@ def fetch_latest_option_data(symbol):
     try:
         logger.info(f"Fetching latest option data for {symbol}")
         
-        # Get current date and simulate some expiration dates
+        # Get current date and set expiration date to exactly 30 days
         current_date = datetime.now().date()
         expirations = [
-            current_date + timedelta(days=30),
-            current_date + timedelta(days=60),
-            current_date + timedelta(days=90)
+            current_date + timedelta(days=30)
         ]
         
         # Simulate underlying price
@@ -112,13 +110,7 @@ def get_base_price_for_symbol(symbol):
     """Return a realistic base price for the given symbol"""
     prices = {
         'BTC': 65000.0,  # Bitcoin price in USD
-        'ETH': 3500.0,   # Ethereum price in USD
-        'SPY': 450.0,
-        'QQQ': 380.0,
-        'AAPL': 180.0,
-        'MSFT': 350.0,
-        'AMZN': 140.0,
-        'TSLA': 250.0
+        'ETH': 3500.0    # Ethereum price in USD
     }
     return prices.get(symbol, 100.0)
 
