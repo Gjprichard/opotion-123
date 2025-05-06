@@ -414,9 +414,31 @@ def _get_deribit_options(symbol, current_price, strike_min, strike_max, exchange
                             continue
                         
                         # 处理成交量，即使成交量为0也保留
-                        volume = ticker.get('baseVolume', 0) or 0  # 确保None转为0
+                        # 先记录原始成交量数据结构，用于调试
+                        volume_stats = {
+                            'baseVolume': ticker.get('baseVolume'),
+                            'info_volume': ticker.get('info', {}).get('volume'),
+                            'info_volume_usd': ticker.get('info', {}).get('volume_usd'),
+                            'stats_volume': ticker.get('info', {}).get('stats', {}).get('volume'),
+                            'stats_volume_usd': ticker.get('info', {}).get('stats', {}).get('volume_usd')
+                        }
+                        logger.debug(f"Deribit期权{option['symbol']}成交量数据: {volume_stats}")
+                        
+                        # 使用Deribit的stats.volume字段，这是更准确的成交量数据
+                        # 如果不存在，则回退到baseVolume
+                        volume_raw = ticker.get('info', {}).get('stats', {}).get('volume', 0) or ticker.get('baseVolume', 0) or 0
+                        # 确保转换为浮点数，以支持数据服务中的类型转换
+                        try:
+                            volume = float(volume_raw)
+                        except (ValueError, TypeError):
+                            volume = 0
                             
-                        open_interest = ticker.get('info', {}).get('open_interest', 0)
+                        open_interest_raw = ticker.get('info', {}).get('open_interest', 0)
+                        # 确保转换为浮点数，以支持数据服务中的类型转换
+                        try:
+                            open_interest = float(open_interest_raw)
+                        except (ValueError, TypeError):
+                            open_interest = 0
                         
                         # Greeks处理
                         greeks = ticker.get('info', {}).get('greeks', {})
@@ -596,9 +618,21 @@ def _get_binance_options(symbol, current_price, strike_min, strike_max, exchange
                     continue
                 
                 # 成交量和持仓量 - 确保是数字类型
-                volume = ticker.get('baseVolume', 0) or 0
+                # 先记录原始成交量数据结构，用于调试
+                volume_stats = {
+                    'baseVolume': ticker.get('baseVolume'),
+                    'info_volume': ticker.get('info', {}).get('volume'),
+                    'info_quoteVolume': ticker.get('info', {}).get('quoteVolume'),
+                    'quoteVolume': ticker.get('quoteVolume')
+                }
+                logger.debug(f"Binance期权{option.get('symbol', '')}成交量数据: {volume_stats}")
+                
+                # 尝试从不同字段获取成交量数据，按优先级排序  
+                volume_raw = (ticker.get('info', {}).get('volume') or 
+                            ticker.get('baseVolume') or 
+                            ticker.get('quoteVolume', 0) or 0)
                 try:
-                    volume = float(volume)
+                    volume = float(volume_raw)
                 except (TypeError, ValueError):
                     volume = 0
                     
@@ -752,9 +786,22 @@ def _get_okx_options(symbol, current_price, strike_min, strike_max, exchange):
                     continue
                 
                 # 成交量和持仓量 - 确保是数字类型
-                volume = ticker.get('baseVolume', 0) or 0
+                # 先记录原始成交量数据结构，用于调试
+                volume_stats = {
+                    'baseVolume': ticker.get('baseVolume'),
+                    'info_volCcy24h': ticker.get('info', {}).get('volCcy24h'),
+                    'info_vol24h': ticker.get('info', {}).get('vol24h'),
+                    'quoteVolume': ticker.get('quoteVolume')
+                }
+                logger.debug(f"OKX期权{option.get('symbol', '')}成交量数据: {volume_stats}")
+                
+                # OKX的成交量一般在volCcy24h或vol24h字段中
+                volume_raw = (ticker.get('info', {}).get('volCcy24h') or 
+                             ticker.get('info', {}).get('vol24h') or
+                             ticker.get('baseVolume') or 
+                             ticker.get('quoteVolume', 0) or 0)
                 try:
-                    volume = float(volume)
+                    volume = float(volume_raw)
                 except (TypeError, ValueError):
                     volume = 0
                     

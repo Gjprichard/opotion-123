@@ -94,7 +94,7 @@ def fetch_latest_option_data(symbol):
                     option_type=data["option_type"],
                     underlying_price=float(data["underlying_price"]),
                     option_price=float(data.get("option_price", 0) or 0),
-                    volume=int(data.get("volume", 0) or 0),
+                    volume=int(float(data.get("volume", 0) or 0)),
                     open_interest=int(float(data.get("open_interest", 0) or 0)),
                     implied_volatility=float(data.get("implied_volatility", 0) or 0),
                     delta=float(data.get("delta", 0) or 0),
