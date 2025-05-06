@@ -101,9 +101,9 @@ def calculate_deviation_metrics(symbol, time_periods=None):
                     if prev_option.underlying_price > 0:
                         market_price_change_pct = (option.underlying_price - prev_option.underlying_price) / prev_option.underlying_price * 100
                 else:
-                    # 如果找不到前一时段的数据，但当前有成交量，则视为新增合约，设置默认变化率
-                    if option.volume and option.volume > 0:
-                        volume_change_pct = 100.0  # 新增合约，默认成交量增长100%
+                    # 如果找不到前一时段的数据，暂时不设置变化率
+                    # 对于新增合约，不应默认标记为异常情况
+                    volume_change_pct = None
                 
                 # 检查是否是异常情况
                 is_anomaly, anomaly_level = check_deviation_anomaly(
@@ -199,7 +199,7 @@ def check_deviation_anomaly(volume_change, premium_change, price_change, option_
 
 def generate_deviation_alert(deviation, anomaly_level, volume_change, premium_change, price_change):
     """
-    生成期权执行价偏离警报
+    生成期权执行价偏离警报，避免重复警报
     """
     trigger_conditions = []
     
@@ -224,7 +224,25 @@ def generate_deviation_alert(deviation, anomaly_level, volume_change, premium_ch
         f"触发条件: {trigger_condition}"
     )
     
-    # 创建警报
+    # 检查是否已经存在相同的警报（同一时间周期、同一品种、同一执行价、同一期权类型，且未确认）
+    # 时间窗口设为最近10分钟内
+    recent_time = datetime.utcnow() - timedelta(minutes=10)
+    existing_alert = DeviationAlert.query.filter(
+        DeviationAlert.symbol == deviation.symbol,
+        DeviationAlert.time_period == deviation.time_period,
+        DeviationAlert.strike_price == deviation.strike_price,
+        DeviationAlert.option_type == deviation.option_type,
+        DeviationAlert.alert_type == anomaly_level,
+        DeviationAlert.timestamp >= recent_time,
+        DeviationAlert.is_acknowledged == False
+    ).first()
+    
+    # 如果已经存在相同警报，则不重复生成
+    if existing_alert:
+        logger.debug(f"警报已存在，不重复生成: {message}")
+        return
+    
+    # 创建新的警报
     alert = DeviationAlert(
         symbol=deviation.symbol,
         time_period=deviation.time_period,

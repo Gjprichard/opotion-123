@@ -606,7 +606,7 @@ def _get_okx_options(symbol, current_price, strike_min, strike_max, exchange):
         option_data = []
         
         # 由于API限制，每次只处理一部分期权
-        process_count = min(len(option_markets), 30)  # 限制处理数量
+        process_count = min(len(option_markets), 15)  # 减少处理数量以提高性能
         
         for option in option_markets[:process_count]:
             try:
