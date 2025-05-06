@@ -1971,18 +1971,28 @@ const VolumeAnalysisModule = {
      * @param {Object} exchangeData - 多交易所数据对象
      */
     createPCRComparisonChart(exchangeData) {
-        const ctx = document.getElementById('pcr-comparison-chart');
-        if (!ctx) {
-            console.warn('PCR比较图表的canvas元素不存在');
-            return;
-        }
-        
-        if (!exchangeData) {
-            console.warn('PCR比较图表没有有效的交易所数据');
-            return;
-        }
-        
         try {
+            const ctx = document.getElementById('pcr-comparison-chart');
+            if (!ctx) {
+                console.warn('PCR比较图表的canvas元素不存在');
+                return;
+            }
+            
+            // 销毁现有图表以避免内存泄漏和渲染问题
+            if (this.pcrComparisonChart) {
+                try {
+                    this.pcrComparisonChart.destroy();
+                } catch (e) {
+                    console.warn('销毁旧PCR图表时出错:', e);
+                }
+                this.pcrComparisonChart = null;
+            }
+            
+            if (!exchangeData) {
+                console.warn('PCR比较图表没有有效的交易所数据');
+                return;
+            }
+            
             console.log('创建PCR对比图表，使用数据:', exchangeData);
             
             // 确保数据是对象类型
@@ -1999,24 +2009,47 @@ const VolumeAnalysisModule = {
             
             // 遍历所有交易所，收集真实数据
             expectedExchanges.forEach(exchange => {
-                const data = exchangeData[exchange] || {ratio: 1.0};
+                // 防御性检查，确保交易所数据存在
+                if (!exchangeData[exchange]) {
+                    pcrData.push({
+                        exchange: exchange.charAt(0).toUpperCase() + exchange.slice(1),
+                        pcr: 1.0,
+                        isReal: true, 
+                        displayValue: '1.00'
+                    });
+                    return;
+                }
+                
+                const data = exchangeData[exchange];
                 
                 // 使用安全获取ratio的方式，确保始终有有效值
                 let ratio = 1.0; // 默认值为1.0表示中性市场
                 
-                if (data && typeof data === 'object') {
+                try {
+                    // 处理数字类型
                     if (typeof data.ratio === 'number' && !isNaN(data.ratio)) {
                         ratio = data.ratio;
-                    } else if (typeof data.ratio === 'string') {
-                        try {
-                            ratio = parseFloat(data.ratio);
-                            if (isNaN(ratio)) ratio = 1.0;
-                        } catch (e) {
-                            console.warn(`无法将${exchange}的ratio值转换为数字:`, data.ratio);
-                            ratio = 1.0;
+                    }
+                    // 处理字符串类型，可能从API返回
+                    else if (typeof data.ratio === 'string') {
+                        const parsedRatio = parseFloat(data.ratio);
+                        if (!isNaN(parsedRatio)) {
+                            ratio = parsedRatio;
                         }
                     }
+                    // 如果没有ratio但有成交量数据，则计算
+                    else if (data.call_volume !== undefined && data.put_volume !== undefined) {
+                        const callVolume = parseFloat(data.call_volume) || 0;
+                        const putVolume = parseFloat(data.put_volume) || 0;
+                        // 避免除以零
+                        ratio = callVolume > 0 ? putVolume / callVolume : (putVolume > 0 ? 2.0 : 1.0);
+                    }
+                } catch (e) {
+                    console.warn(`计算${exchange}的PCR比率时出错:`, e);
                 }
+                
+                // 限制比率在合理范围内
+                ratio = Math.max(0, Math.min(ratio, 3));
                 
                 // 添加真实交易所数据
                 pcrData.push({
@@ -2029,16 +2062,6 @@ const VolumeAnalysisModule = {
             
             console.log('使用真实交易所数据:', pcrData);
             
-            // 销毁现有图表以避免内存泄漏
-            if (this.pcrComparisonChart) {
-                try {
-                    this.pcrComparisonChart.destroy();
-                    this.pcrComparisonChart = null;
-                } catch (e) {
-                    console.warn('销毁旧PCR图表时出错:', e);
-                }
-            }
-            
             // 检查是否有可用数据
             if (!pcrData.length) {
                 console.warn('没有PCR数据可用于图表');
@@ -2046,28 +2069,26 @@ const VolumeAnalysisModule = {
             }
             
             // 创建数据可视化样式
-            const backgroundColors = pcrData.map(item => {
-                if (!item.isReal) {
-                    return 'rgba(201, 203, 207, 0.4)'; // 参考值使用浅灰色
-                }
+            const backgroundColors = [];
+            const borderColors = [];
+            
+            // 为每个交易所分配特定颜色
+            pcrData.forEach(item => {
+                let bgColor = 'rgba(75, 192, 192, 0.7)';  // 默认颜色
                 
                 // 根据交易所名称分配特定颜色
                 const name = item.exchange.toLowerCase();
                 if (name.includes('deribit')) {
-                    return 'rgba(54, 162, 235, 0.7)'; // 德利比特蓝
+                    bgColor = 'rgba(54, 162, 235, 0.7)'; // 德利比特蓝
                 } else if (name.includes('binance')) {
-                    return 'rgba(255, 99, 132, 0.7)'; // 币安红
+                    bgColor = 'rgba(255, 99, 132, 0.7)'; // 币安红
                 } else if (name.includes('okx')) {
-                    return 'rgba(255, 206, 86, 0.7)'; // OKX黄
-                } else {
-                    return 'rgba(75, 192, 192, 0.7)'; // 其他交易所青色
+                    bgColor = 'rgba(255, 206, 86, 0.7)'; // OKX黄
                 }
+                
+                backgroundColors.push(bgColor);
+                borderColors.push(bgColor.replace('0.7', '1'));
             });
-            
-            // 创建边框色数组，边框使用更深的颜色
-            const borderColors = backgroundColors.map(color => 
-                color.replace('0.7', '1').replace('0.4', '0.8')
-            );
             
             // 创建图表，提供更丰富的交互信息
             this.pcrComparisonChart = new Chart(ctx, {
@@ -2091,14 +2112,6 @@ const VolumeAnalysisModule = {
                             title: {
                                 display: true,
                                 text: '看跌/看涨比率'
-                            },
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.1)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
                             }
                         }
                     },
@@ -2106,38 +2119,54 @@ const VolumeAnalysisModule = {
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    const item = pcrData[context.dataIndex];
-                                    let label = '看跌/看涨比率: ' + item.displayValue;
-                                    
-                                    if (!item.isReal) {
-                                        label += ' (参考值)';
+                                    try {
+                                        const dataIndex = context.dataIndex;
+                                        if (dataIndex === undefined || !pcrData[dataIndex]) {
+                                            return '数据无效';
+                                        }
+                                        
+                                        const item = pcrData[dataIndex];
+                                        let label = '看跌/看涨比率: ' + item.displayValue;
+                                        
+                                        // 添加解释说明
+                                        if (item.pcr > 1.2) {
+                                            label += '\n市场偏看跌情绪较强';
+                                        } else if (item.pcr > 1.05) {
+                                            label += '\n市场略偏看跌情绪';
+                                        } else if (item.pcr >= 0.95 && item.pcr <= 1.05) {
+                                            label += '\n市场情绪较为中性';
+                                        } else if (item.pcr >= 0.8) {
+                                            label += '\n市场略偏看涨情绪';
+                                        } else {
+                                            label += '\n市场偏看涨情绪较强';
+                                        }
+                                        
+                                        return label;
+                                    } catch (e) {
+                                        console.error('渲染tooltip标签时出错:', e);
+                                        return '数据加载中...';
                                     }
-                                    
-                                    // 添加解释说明
-                                    if (item.pcr > 1.2) {
-                                        label += '\n市场偏看跌情绪较强';
-                                    } else if (item.pcr > 1.05) {
-                                        label += '\n市场略偏看跌情绪';
-                                    } else if (item.pcr >= 0.95 && item.pcr <= 1.05) {
-                                        label += '\n市场情绪较为中性';
-                                    } else if (item.pcr >= 0.8) {
-                                        label += '\n市场略偏看涨情绪';
-                                    } else {
-                                        label += '\n市场偏看涨情绪较强';
-                                    }
-                                    
-                                    return label;
                                 }
                             }
                         },
-                        legend: {
-                            display: false
+                        title: {
+                            display: true,
+                            text: '交易所看跌/看涨期权比率对比',
+                            color: 'white'
+                        },
+                        subtitle: {
+                            display: true,
+                            text: 'PCR > 1: 看跌情绪, PCR < 1: 看涨情绪',
+                            color: 'rgba(255, 255, 255, 0.7)'
                         }
                     }
                 }
             });
         } catch (e) {
             console.error('创建PCR对比图表出错:', e);
+            // 显示错误信息
+            const errorMsg = e.message || String(e);
+            console.error({error: errorMsg, stack: e.stack});
         }
     },
     
@@ -2146,28 +2175,38 @@ const VolumeAnalysisModule = {
      * @param {Object} exchangeData - 多交易所数据对象
      */
     createVolumeDistributionChart(exchangeData) {
-        const ctx = document.getElementById('volume-distribution-chart');
-        if (!ctx) {
-            console.warn('成交量分布图表的canvas元素不存在');
-            return;
-        }
-        
-        if (!exchangeData) {
-            console.warn('成交量分布图表没有有效的交易所数据');
-            return;
-        }
-        
         try {
+            const ctx = document.getElementById('volume-distribution-chart');
+            if (!ctx) {
+                console.warn('成交量分布图表的canvas元素不存在');
+                return;
+            }
+            
+            // 销毁现有图表以避免内存泄漏和渲染问题
+            if (this.volumeDistributionChart) {
+                try {
+                    this.volumeDistributionChart.destroy();
+                } catch (e) {
+                    console.warn('销毁旧成交量分布图表时出错:', e);
+                }
+                this.volumeDistributionChart = null;
+            }
+            
+            if (!exchangeData) {
+                console.warn('成交量分布图表没有有效的交易所数据');
+                return;
+            }
+            
             console.log('创建成交量分布图表，使用数据:', exchangeData);
+            
+            // 确保数据是对象类型
+            if (typeof exchangeData !== 'object') {
+                console.warn('成交量分布图表数据不是对象类型:', typeof exchangeData);
+                return;
+            }
             
             // 确保显示所有交易所，即使某些交易所没有数据
             const expectedExchanges = ['deribit', 'binance', 'okx'];
-            
-            // 如果没有交易所数据，显示提示并退出
-            if (!exchangeData) {
-                console.warn('没有交易所数据可用于成交量分布图表');
-                return;
-            }
             
             let volumeData = [];
             const exchanges = Object.keys(exchangeData);
@@ -2380,28 +2419,38 @@ const VolumeAnalysisModule = {
      * @param {Object} exchangeData - 多交易所数据对象
      */
     createPremiumSpreadChart(exchangeData) {
-        const ctx = document.getElementById('premium-spread-chart');
-        if (!ctx) {
-            console.warn('溢价差异图表的canvas元素不存在');
-            return;
-        }
-        
-        if (!exchangeData) {
-            console.warn('溢价差异图表没有有效的交易所数据');
-            return;
-        }
-        
         try {
+            const ctx = document.getElementById('premium-spread-chart');
+            if (!ctx) {
+                console.warn('溢价差异图表的canvas元素不存在');
+                return;
+            }
+            
+            // 销毁现有图表以避免内存泄漏和渲染问题
+            if (this.premiumSpreadChart) {
+                try {
+                    this.premiumSpreadChart.destroy();
+                } catch (e) {
+                    console.warn('销毁旧溢价差异图表时出错:', e);
+                }
+                this.premiumSpreadChart = null;
+            }
+            
+            if (!exchangeData) {
+                console.warn('溢价差异图表没有有效的交易所数据');
+                return;
+            }
+            
+            // 确保数据是对象类型
+            if (typeof exchangeData !== 'object') {
+                console.warn('溢价差异图表数据不是对象类型:', typeof exchangeData);
+                return;
+            }
+        
             console.log('创建溢价差异图表，使用数据:', exchangeData);
             
             // 确保显示所有交易所，即使某些交易所没有数据
             const expectedExchanges = ['deribit', 'binance', 'okx'];
-            
-            // 如果没有交易所数据，显示提示并退出
-            if (!exchangeData) {
-                console.warn('没有交易所数据可用于溢价差异图表');
-                return;
-            }
             
             let premiumData = [];
             let isMultipleExchanges = true;
