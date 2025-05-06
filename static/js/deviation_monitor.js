@@ -1985,6 +1985,12 @@ const VolumeAnalysisModule = {
         try {
             console.log('创建PCR对比图表，使用数据:', exchangeData);
             
+            // 确保数据是对象类型
+            if (typeof exchangeData !== 'object') {
+                console.warn('PCR比较图表数据不是对象类型:', typeof exchangeData);
+                return;
+            }
+            
             // 我们要确保显示所有交易所，即使某些交易所没有数据
             const expectedExchanges = ['deribit', 'binance', 'okx'];
             
@@ -1994,8 +2000,23 @@ const VolumeAnalysisModule = {
             // 遍历所有交易所，收集真实数据
             expectedExchanges.forEach(exchange => {
                 const data = exchangeData[exchange] || {ratio: 1.0};
+                
                 // 使用安全获取ratio的方式，确保始终有有效值
-                const ratio = typeof data.ratio === 'number' && !isNaN(data.ratio) ? data.ratio : 1.0;
+                let ratio = 1.0; // 默认值为1.0表示中性市场
+                
+                if (data && typeof data === 'object') {
+                    if (typeof data.ratio === 'number' && !isNaN(data.ratio)) {
+                        ratio = data.ratio;
+                    } else if (typeof data.ratio === 'string') {
+                        try {
+                            ratio = parseFloat(data.ratio);
+                            if (isNaN(ratio)) ratio = 1.0;
+                        } catch (e) {
+                            console.warn(`无法将${exchange}的ratio值转换为数字:`, data.ratio);
+                            ratio = 1.0;
+                        }
+                    }
+                }
                 
                 // 添加真实交易所数据
                 pcrData.push({
@@ -2012,9 +2033,16 @@ const VolumeAnalysisModule = {
             if (this.pcrComparisonChart) {
                 try {
                     this.pcrComparisonChart.destroy();
+                    this.pcrComparisonChart = null;
                 } catch (e) {
                     console.warn('销毁旧PCR图表时出错:', e);
                 }
+            }
+            
+            // 检查是否有可用数据
+            if (!pcrData.length) {
+                console.warn('没有PCR数据可用于图表');
+                return;
             }
             
             // 创建数据可视化样式
