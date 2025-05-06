@@ -355,9 +355,21 @@ def _get_deribit_options(symbol, current_price, strike_min, strike_max, exchange
                         
                         # 基本信息处理
                         try:
-                            expiry_date = datetime.fromtimestamp(option['expiry'] / 1000).date()
+                            # 确保expiry是数值类型
+                            if isinstance(option['expiry'], str):
+                                try:
+                                    expiry_ts = float(option['expiry'])
+                                except ValueError:
+                                    logger.warning(f"Deribit期权{option['symbol']}的到期时间戳格式无效: {option['expiry']}")
+                                    continue
+                            else:
+                                expiry_ts = option['expiry']
+                                
+                            expiry_date = datetime.fromtimestamp(expiry_ts / 1000).date()
+                            # 记录找到的近期期权合约
+                            logger.debug(f"找到近期Deribit期权合约: {option['symbol']}, 到期日: {expiry_date}")
                         except (TypeError, ValueError) as e:
-                            logger.warning(f"无法处理Deribit期权{option['symbol']}的到期日: {e}")
+                            logger.warning(f"无法处理Deribit期权{option['symbol']}的到期日: {e}, 值: {option.get('expiry')}")
                             continue
                             
                         option_type = option.get('optionType', '')  # 'call' 或 'put'
@@ -369,6 +381,14 @@ def _get_deribit_options(symbol, current_price, strike_min, strike_max, exchange
                         if not strike_price:
                             logger.warning(f"Deribit期权{option['symbol']}的执行价无效")
                             continue
+                        
+                        # 确保strike_price是数值类型
+                        if isinstance(strike_price, str):
+                            try:
+                                strike_price = float(strike_price)
+                            except ValueError:
+                                logger.warning(f"Deribit期权{option['symbol']}的执行价格式无效: {strike_price}")
+                                continue
                         
                         # 计算价格
                         option_price = None
@@ -401,11 +421,43 @@ def _get_deribit_options(symbol, current_price, strike_min, strike_max, exchange
                         # Greeks处理
                         greeks = ticker.get('info', {}).get('greeks', {})
                         
-                        implied_volatility = ticker.get('info', {}).get('mark_iv', 0) / 100  # 转换为小数
-                        delta = greeks.get('delta')
-                        gamma = greeks.get('gamma')
-                        theta = greeks.get('theta')
-                        vega = greeks.get('vega')
+                        # 确保隐含波动率数据是数值类型
+                        try:
+                            mark_iv = ticker.get('info', {}).get('mark_iv', 0)
+                            if isinstance(mark_iv, str):
+                                mark_iv = float(mark_iv)
+                            implied_volatility = mark_iv / 100  # 转换为小数
+                        except (TypeError, ValueError):
+                            implied_volatility = 0
+                            
+                        # 确保Greeks数据为数值类型
+                        try:
+                            delta = greeks.get('delta')
+                            if isinstance(delta, str):
+                                delta = float(delta)
+                        except (TypeError, ValueError):
+                            delta = None
+                            
+                        try:
+                            gamma = greeks.get('gamma')
+                            if isinstance(gamma, str):
+                                gamma = float(gamma)
+                        except (TypeError, ValueError):
+                            gamma = None
+                            
+                        try:
+                            theta = greeks.get('theta') 
+                            if isinstance(theta, str):
+                                theta = float(theta)
+                        except (TypeError, ValueError):
+                            theta = None
+                            
+                        try:
+                            vega = greeks.get('vega')
+                            if isinstance(vega, str):
+                                vega = float(vega)
+                        except (TypeError, ValueError):
+                            vega = None
                         
                         # 添加到结果集
                         option_data.append({
@@ -479,12 +531,26 @@ def _get_binance_options(symbol, current_price, strike_min, strike_max, exchange
                 
                 # 提取基本信息
                 try:
-                    expiry_date = datetime.fromtimestamp(option.get('expiry', 0) / 1000).date() if option.get('expiry') else None
-                    if not expiry_date:
+                    # 确保expiry是数值类型
+                    expiry = option.get('expiry')
+                    if expiry:
+                        if isinstance(expiry, str):
+                            try:
+                                expiry_ts = float(expiry)
+                            except ValueError:
+                                logger.warning(f"Binance期权{option.get('symbol', '')}的到期时间戳格式无效: {expiry}")
+                                continue
+                        else:
+                            expiry_ts = expiry
+                            
+                        expiry_date = datetime.fromtimestamp(expiry_ts / 1000).date()
+                        # 记录找到的近期期权合约
+                        logger.debug(f"找到近期Binance期权合约: {option.get('symbol', '')}, 到期日: {expiry_date}")
+                    else:
                         logger.warning(f"Binance期权{option.get('symbol', '')}没有有效的到期日")
                         continue
                 except (TypeError, ValueError) as e:
-                    logger.warning(f"无法处理Binance期权{option.get('symbol', '')}的到期日: {e}")
+                    logger.warning(f"无法处理Binance期权{option.get('symbol', '')}的到期日: {e}, 值: {option.get('expiry')}")
                     continue
                     
                 # 获取期权类型    
@@ -617,12 +683,26 @@ def _get_okx_options(symbol, current_price, strike_min, strike_max, exchange):
                 
                 # 提取基本信息
                 try:
-                    expiry_date = datetime.fromtimestamp(option.get('expiry', 0) / 1000).date() if option.get('expiry') else None
-                    if not expiry_date:
+                    # 确保expiry是数值类型
+                    expiry = option.get('expiry')
+                    if expiry:
+                        if isinstance(expiry, str):
+                            try:
+                                expiry_ts = float(expiry)
+                            except ValueError:
+                                logger.warning(f"OKX期权{option.get('symbol', '')}的到期时间戳格式无效: {expiry}")
+                                continue
+                        else:
+                            expiry_ts = expiry
+                            
+                        expiry_date = datetime.fromtimestamp(expiry_ts / 1000).date()
+                        # 记录找到的近期期权合约
+                        logger.debug(f"找到近期OKX期权合约: {option.get('symbol', '')}, 到期日: {expiry_date}")
+                    else:
                         logger.warning(f"OKX期权{option.get('symbol', '')}没有有效的到期日")
                         continue
                 except (TypeError, ValueError) as e:
-                    logger.warning(f"无法处理OKX期权{option.get('symbol', '')}的到期日: {e}")
+                    logger.warning(f"无法处理OKX期权{option.get('symbol', '')}的到期日: {e}, 值: {option.get('expiry')}")
                     continue
                 
                 # OKX的期权类型可能在不同位置
