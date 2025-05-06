@@ -613,64 +613,9 @@ def get_call_put_volume_analysis(symbol, time_period='15m', days=7, include_hist
             anomaly_call_count += anomaly_calls
             anomaly_put_count += anomaly_puts
             
-        # 如果启用模拟数据，并且Deribit有数据但其他交易所没有数据，则添加模拟数据
-        if use_simulated_exchange_data and total_call_volume > 0 and total_put_volume > 0:
-            deribit_data = exchange_data.get('deribit', {})
-            deribit_call_volume = deribit_data.get('call_volume', 0)
-            deribit_put_volume = deribit_data.get('put_volume', 0)
-            
-            if deribit_call_volume > 0 and deribit_put_volume > 0:
-                # 为Binance生成模拟数据 (约80%的Deribit数据规模，有更高的看涨倾向)
-                binance_data = exchange_data.get('binance', {})
-                if binance_data.get('call_volume', 0) == 0 and binance_data.get('put_volume', 0) == 0:
-                    binance_call_volume = int(deribit_call_volume * 0.8 * 1.2)  # 比例调整为偏向看涨
-                    binance_put_volume = int(deribit_put_volume * 0.8 * 0.9)    # 比例调整为偏向看涨
-                    binance_ratio = binance_call_volume / binance_put_volume if binance_put_volume > 0 else 1.2
-                    
-                    # 随机生成异常数量
-                    import random
-                    binance_anomaly_calls = int(binance_call_volume * random.uniform(0.01, 0.05))
-                    binance_anomaly_puts = int(binance_put_volume * random.uniform(0.01, 0.05))
-                    
-                    exchange_data['binance'] = {
-                        'call_volume': binance_call_volume,
-                        'put_volume': binance_put_volume,
-                        'ratio': binance_ratio,
-                        'anomaly_calls': binance_anomaly_calls,
-                        'anomaly_puts': binance_anomaly_puts
-                    }
-                    
-                    # 更新总数据
-                    total_call_volume += binance_call_volume
-                    total_put_volume += binance_put_volume
-                    anomaly_call_count += binance_anomaly_calls
-                    anomaly_put_count += binance_anomaly_puts
-                
-                # 为OKX生成模拟数据 (约60%的Deribit数据规模，有更高的看跌倾向)
-                okx_data = exchange_data.get('okx', {})
-                if okx_data.get('call_volume', 0) == 0 and okx_data.get('put_volume', 0) == 0:
-                    okx_call_volume = int(deribit_call_volume * 0.6 * 0.9)  # 比例调整为偏向看跌
-                    okx_put_volume = int(deribit_put_volume * 0.6 * 1.3)    # 比例调整为偏向看跌
-                    okx_ratio = okx_call_volume / okx_put_volume if okx_put_volume > 0 else 0.8
-                    
-                    # 随机生成异常数量
-                    import random
-                    okx_anomaly_calls = int(okx_call_volume * random.uniform(0.01, 0.03))
-                    okx_anomaly_puts = int(okx_put_volume * random.uniform(0.02, 0.06))
-                    
-                    exchange_data['okx'] = {
-                        'call_volume': okx_call_volume,
-                        'put_volume': okx_put_volume,
-                        'ratio': okx_ratio,
-                        'anomaly_calls': okx_anomaly_calls,
-                        'anomaly_puts': okx_anomaly_puts
-                    }
-                    
-                    # 更新总数据
-                    total_call_volume += okx_call_volume
-                    total_put_volume += okx_put_volume
-                    anomaly_call_count += okx_anomaly_calls
-                    anomaly_put_count += okx_anomaly_puts
+        # 禁用模拟数据，仅使用真实API数据
+        # 2025.05.06: 停用模拟数据，改为使用真实OKX交易所数据
+        logger.info(f"使用真实交易所数据: {exchange_data.keys()}")
         
         # 计算总体统计数据
         total_volume = total_call_volume + total_put_volume
@@ -770,44 +715,8 @@ def get_call_put_volume_analysis(symbol, time_period='15m', days=7, include_hist
                 # 默认价格
                 market_price_base = 90000 if symbol == 'BTC' else 1800 if symbol == 'ETH' else 1.0
             
-            # 市场价格随时间的波动模式
-            import random
-            import math
-            price_trend = [1.0]
-            for i in range(intervals):
-                # 添加一些波动性，有时会有突然的变化
-                change = random.uniform(-0.015, 0.015)
-                if random.random() < 0.1:  # 10%的概率有较大波动
-                    change *= 2
-                
-                # 添加一点周期性
-                cyclical = 0.005 * math.sin(i * math.pi / 6)
-                
-                # 计算新价格比例
-                next_price = price_trend[-1] * (1 + change + cyclical)
-                price_trend.append(next_price)
-            
-            # 看涨看跌比例的波动模式（和市场价格相关但不完全相关）
-            ratio_trend = []
-            for i in range(intervals+1):
-                # 基础比例为1.0左右
-                base_ratio = 1.0
-                
-                # 趋势跟随组件（价格上涨时比例上升，价格下跌时比例下降）
-                trend_component = 0.6 * (price_trend[i] - 1.0)
-                
-                # 反向压力组件（当价格变化过大时，比例会有反向调整）
-                reverse_component = -0.3 * (price_trend[i] - 1.0)**2 * 100
-                
-                # 随机噪声
-                noise = random.uniform(-0.05, 0.05)
-                
-                # 最终比例
-                ratio = base_ratio + trend_component + reverse_component + noise
-                
-                # 保证比例在合理范围内
-                ratio = max(0.7, min(1.3, ratio))
-                ratio_trend.append(ratio)
+            # 2025.05.06: 停用模拟数据，改为完全使用真实数据
+            logger.info(f"分析{symbol}在{time_period}时间周期的真实数据，数据区间: {days}天")
             
             # 生成历史数据
             for i in range(intervals):
@@ -840,29 +749,6 @@ def get_call_put_volume_analysis(symbol, time_period='15m', days=7, include_hist
                         'call_volume': period_call_volume,
                         'put_volume': period_put_volume,
                         'market_price': real_market_price
-                    })
-                elif use_simulated_exchange_data:
-                    # 使用模拟数据
-                    sim_market_price = market_price_base * price_trend[i]
-                    sim_ratio = ratio_trend[i]
-                    
-                    # 创建波动的成交量
-                    base_volume = total_volume / (intervals * 2) # 总成交量平均分配
-                    volume_factor = 1.0 + 0.2 * math.sin(i * math.pi / 4) + random.uniform(-0.1, 0.1)
-                    sim_total_volume = base_volume * volume_factor
-                    
-                    # 根据比例划分看涨看跌
-                    sim_call_ratio = sim_ratio / (1 + sim_ratio)
-                    sim_call_volume = int(sim_total_volume * sim_call_ratio)
-                    sim_put_volume = int(sim_total_volume * (1 - sim_call_ratio))
-                    
-                    # 添加到历史数据
-                    history.append({
-                        'timestamp': period_end.strftime('%Y-%m-%d %H:%M'),
-                        'call_put_ratio': sim_ratio,
-                        'call_volume': sim_call_volume,
-                        'put_volume': sim_put_volume,
-                        'market_price': sim_market_price
                     })
                 else:
                     # 添加空记录

@@ -24,27 +24,12 @@ def fetch_latest_option_data(symbol):
         from app import db
         from models import SystemSetting, ApiCredential
         
-        use_real_data_setting = SystemSetting.query.filter_by(setting_name='use_real_data').first()
-        use_real_data = use_real_data_setting.get_typed_value() if use_real_data_setting else False
+        # 强制使用实时数据并只使用OKX交易所
+        use_real_data = True
         
-        # 如果不使用实时数据，直接使用模拟数据
-        if not use_real_data:
-            logger.info(f"Real data is disabled, using simulation for {symbol}")
-            return fallback_option_data(symbol)
-        
-        # 检查系统中是否启用了特定交易所
-        enabled_exchanges = []
-        for exchange_id in ['deribit', 'binance', 'okx']:
-            exchange_setting = SystemSetting.query.filter_by(
-                setting_name=f'enable_{exchange_id}'
-            ).first()
-            
-            if exchange_setting and exchange_setting.get_typed_value():
-                enabled_exchanges.append(exchange_id)
-        
-        # 如果没有启用任何交易所，默认启用Deribit
-        if not enabled_exchanges:
-            enabled_exchanges = ['deribit']
+        # 暂时只使用OKX交易所
+        enabled_exchanges = ['okx']
+        logger.info(f"Using real data from OKX exchange for {symbol}")
             
         logger.info(f"Fetching {symbol} option data from exchanges: {', '.join(enabled_exchanges)}")
         
@@ -79,10 +64,10 @@ def fetch_latest_option_data(symbol):
             except Exception as e:
                 logger.error(f"Error fetching {symbol} data from {exchange_id}: {str(e)}")
         
-        # 如果所有交易所都没有数据，使用备用模拟数据
+        # 如果没有数据，返回错误
         if not all_option_data:
-            logger.warning(f"No option data received from any exchange for {symbol}, using fallback data")
-            return fallback_option_data(symbol)
+            logger.error(f"No option data received from OKX exchange for {symbol}")
+            return False
         
         logger.info(f"Total {len(all_option_data)} option contracts received for {symbol} from all exchanges")
         
@@ -99,26 +84,31 @@ def fetch_latest_option_data(symbol):
             if expiration_date is None:
                 continue  # 跳过没有到期日的记录
                 
-            # 转换为OptionData对象
-            option = OptionData(
-                symbol=data["symbol"],
-                expiration_date=expiration_date,
-                strike_price=float(data["strike_price"]),
-                option_type=data["option_type"],
-                underlying_price=float(data["underlying_price"]),
-                option_price=float(data["option_price"]),
-                volume=int(data.get("volume", 0) or 0),
-                open_interest=int(data.get("open_interest", 0) or 0),
-                implied_volatility=float(data["implied_volatility"]) if data.get("implied_volatility") is not None else None,
-                delta=float(data["delta"]) if data.get("delta") is not None else None,
-                gamma=float(data["gamma"]) if data.get("gamma") is not None else None,
-                theta=float(data["theta"]) if data.get("theta") is not None else None,
-                vega=float(data["vega"]) if data.get("vega") is not None else None,
-                timestamp=data.get("timestamp", datetime.utcnow()),
-                # 添加交易所信息
-                exchange=data.get("exchange", "deribit")  # 默认为deribit以兼容旧数据
-            )
-            new_records.append(option)
+            # 安全转换为OptionData对象，处理可能的空值
+            try:
+                # 提供默认值0或None处理可能的无效值
+                option = OptionData(
+                    symbol=data["symbol"],
+                    expiration_date=expiration_date,
+                    strike_price=float(data["strike_price"]),
+                    option_type=data["option_type"],
+                    underlying_price=float(data["underlying_price"]),
+                    option_price=float(data.get("option_price", 0) or 0),
+                    volume=int(data.get("volume", 0) or 0),
+                    open_interest=int(data.get("open_interest", 0) or 0),
+                    implied_volatility=float(data.get("implied_volatility", 0) or 0),
+                    delta=float(data.get("delta", 0) or 0),
+                    gamma=float(data.get("gamma", 0) or 0),
+                    theta=float(data.get("theta", 0) or 0),
+                    vega=float(data.get("vega", 0) or 0),
+                    timestamp=data.get("timestamp", datetime.utcnow()),
+                    # 添加交易所信息
+                    exchange=data.get("exchange", "okx")  # 默认为okx作为主交易所
+                )
+                new_records.append(option)
+            except (ValueError, TypeError) as e:
+                logger.error(f"处理期权数据时出错: {e}，数据: {data}")
+                # 跳过无效数据但不中断整个处理
         
         # 保存到数据库
         db.session.bulk_save_objects(new_records)
@@ -132,8 +122,8 @@ def fetch_latest_option_data(symbol):
     except Exception as e:
         logger.error(f"Error fetching option data from API: {str(e)}")
         db.session.rollback()
-        # 尝试使用模拟数据作为备选方案
-        return fallback_option_data(symbol)
+        # 不使用模拟数据，直接返回错误
+        return False
 
 def fallback_option_data(symbol):
     """
