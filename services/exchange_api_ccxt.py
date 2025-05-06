@@ -5,7 +5,7 @@
 """
 import ccxt
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
 logger = logging.getLogger(__name__)
@@ -210,10 +210,34 @@ def _get_okx_price(symbol, exchange):
     logger.error(f"无法从OKX获取{symbol}的价格")
     return None
 
+def is_expiry_within_7_days(expiry_timestamp):
+    """
+    检查期权到期日是否在7天内
+    
+    参数:
+    expiry_timestamp - 到期时间戳（毫秒）
+    
+    返回:
+    bool - 是否在7天内到期
+    """
+    if not expiry_timestamp:
+        return False
+        
+    # 计算7天后的时间戳
+    seven_days_later = datetime.utcnow() + timedelta(days=7)
+    seven_days_later_ts = seven_days_later.timestamp() * 1000  # 转换为毫秒
+    
+    # 当前时间戳
+    now_ts = datetime.utcnow().timestamp() * 1000  # 转换为毫秒
+    
+    # 检查到期时间是否在当前时间到7天后之间
+    return now_ts <= expiry_timestamp <= seven_days_later_ts
+
 def get_option_market_data(symbol, exchange_id='deribit'):
     """
     获取期权市场数据 - 多交易所支持版
     仅获取BTC和ETH的期权数据，且只获取执行价偏离市场价 ±10% 的期权合约
+    现在只获取到期日在7天内的期权合约
     
     参数:
     symbol - 交易对符号，如 'BTC', 'ETH'
@@ -255,7 +279,7 @@ def get_option_market_data(symbol, exchange_id='deribit'):
         strike_min = current_price * 0.9
         strike_max = current_price * 1.1
         
-        logger.info(f"[{exchange_id}] 获取{symbol}执行价范围{strike_min:.2f}-{strike_max:.2f}的期权数据")
+        logger.info(f"[{exchange_id}] 获取{symbol}执行价范围{strike_min:.2f}-{strike_max:.2f}的期权数据，且只包含7天内到期的合约")
         
         # 根据不同交易所获取期权数据
         if exchange_id == 'deribit':
@@ -285,7 +309,9 @@ def _get_deribit_options(symbol, current_price, strike_min, strike_max, exchange
                 market['option'] and 
                 market['active'] and
                 market['strike'] and 
-                strike_min <= market['strike'] <= strike_max)
+                strike_min <= market['strike'] <= strike_max and
+                market['expiry'] and
+                is_expiry_within_7_days(market['expiry']))  # 只获取7天内到期的期权
         ]
         
         if not filtered_options:
@@ -385,14 +411,16 @@ def _get_binance_options(symbol, current_price, strike_min, strike_max, exchange
         # 币安期权市场处理
         markets = exchange.markets
         
-        # 筛选期权市场
+        # 筛选期权市场 - 同时筛选执行价和到期日
         option_markets = [
             market for market in markets.values()
             if (market.get('type') == 'option' and 
                 market.get('base') == symbol and
                 market.get('active') and
                 market.get('strike') and
-                strike_min <= market.get('strike') <= strike_max)
+                strike_min <= market.get('strike') <= strike_max and
+                market.get('expiry') and
+                is_expiry_within_7_days(market.get('expiry')))  # 只获取7天内到期的期权
         ]
         
         if not option_markets:
@@ -473,14 +501,16 @@ def _get_okx_options(symbol, current_price, strike_min, strike_max, exchange):
         # OKX期权市场处理
         markets = exchange.markets
         
-        # 筛选期权市场 (OKX的期权格式可能不同)
+        # 筛选期权市场 (OKX的期权格式可能不同) - 同时筛选执行价和到期日
         option_markets = [
             market for market in markets.values()
             if (market.get('type') == 'option' and 
                 market.get('base') == symbol and
                 market.get('active') and
                 market.get('strike') and
-                strike_min <= market.get('strike') <= strike_max)
+                strike_min <= market.get('strike') <= strike_max and
+                market.get('expiry') and
+                is_expiry_within_7_days(market.get('expiry')))  # 只获取7天内到期的期权
         ]
         
         if not option_markets:
