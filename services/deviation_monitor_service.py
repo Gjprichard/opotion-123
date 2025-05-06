@@ -126,7 +126,8 @@ def calculate_deviation_metrics(symbol, time_periods=None):
                     premium_change_percent=premium_change_pct,
                     market_price_change_percent=market_price_change_pct,
                     is_anomaly=is_anomaly,
-                    anomaly_level=anomaly_level
+                    anomaly_level=anomaly_level,
+                    exchange=option.exchange  # 添加交易所信息，使用选项数据的交易所
                 )
                 
                 db.session.add(deviation)
@@ -235,7 +236,9 @@ def generate_deviation_alert(deviation, anomaly_level, volume_change, premium_ch
         trigger_condition=trigger_condition,
         volume_change=volume_change,
         premium_change=premium_change,
-        price_change=price_change
+        price_change=price_change,
+        exchange=deviation.exchange,  # 添加交易所信息
+        option_type=deviation.option_type  # 添加期权类型
     )
     
     db.session.add(alert)
