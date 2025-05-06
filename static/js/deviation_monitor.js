@@ -4,6 +4,11 @@
  * 完全重构版本 - 2023.05.05
  */
 
+// 初始化全局图表对象容器
+if (!window.chartObjects) {
+    window.chartObjects = {};
+}
+
 /**
  * ==========================================
  * 数据工具模块 - 用于数据处理和格式化
@@ -309,31 +314,41 @@ const ChartUtils = {
      * 初始化图表
      */
     initCharts() {
-        this.deviationChart = null;
-        this.trendAnalysisChart = null;
-        this.pcrComparisonChart = null;
-        this.volumeDistributionChart = null;
-        this.premiumSpreadChart = null;
+        // 使用全局图表对象
+        if (!window.chartObjects) {
+            window.chartObjects = {};
+        }
+        window.chartObjects.deviationChart = null;
+        window.chartObjects.trendAnalysisChart = null;
+        window.chartObjects.pcrComparisonChart = null;
+        window.chartObjects.volumeDistributionChart = null;
+        window.chartObjects.premiumSpreadChart = null;
     },
 
     /**
      * 销毁所有图表
      */
     destroyAllCharts() {
-        const charts = [
-            this.deviationChart,
-            this.trendAnalysisChart,
-            this.pcrComparisonChart,
-            this.volumeDistributionChart,
-            this.premiumSpreadChart
+        if (!window.chartObjects) {
+            window.chartObjects = {};
+            return;
+        }
+        
+        const chartKeys = [
+            'deviationChart',
+            'trendAnalysisChart',
+            'pcrComparisonChart',
+            'volumeDistributionChart',
+            'premiumSpreadChart'
         ];
         
-        charts.forEach(chart => {
-            if (chart) {
+        chartKeys.forEach(key => {
+            if (window.chartObjects[key]) {
                 try {
-                    chart.destroy();
+                    window.chartObjects[key].destroy();
+                    window.chartObjects[key] = null;
                 } catch (e) {
-                    console.warn('Error destroying chart:', e);
+                    console.warn(`Error destroying chart ${key}:`, e);
                 }
             }
         });
@@ -515,8 +530,13 @@ const ChartUtils = {
         if (!ctx) return;
         
         // 销毁现有图表
-        if (this.deviationChart) {
-            this.deviationChart.destroy();
+        if (window.chartObjects && window.chartObjects.deviationChart) {
+            try {
+                window.chartObjects.deviationChart.destroy();
+            } catch (e) {
+                console.warn('销毁旧偏离散点图出错:', e);
+            }
+            window.chartObjects.deviationChart = null;
         }
         
         // 准备数据
@@ -529,7 +549,7 @@ const ChartUtils = {
         const avgVolumeChange = DataUtils.formatNumber(DataUtils.getProperty(safeStats, 'avgVolumeChange', 0), 2, '0');
         
         // 创建图表
-        this.deviationChart = new Chart(ctx, {
+        window.chartObjects.deviationChart = new Chart(ctx, {
             type: 'scatter',
             data: {
                 datasets: scatterData
@@ -618,8 +638,13 @@ const ChartUtils = {
         if (!timeSeriesData || timeSeriesData.length === 0) return;
         
         // 销毁现有图表
-        if (this.trendAnalysisChart) {
-            this.trendAnalysisChart.destroy();
+        if (window.chartObjects && window.chartObjects.trendAnalysisChart) {
+            try {
+                window.chartObjects.trendAnalysisChart.destroy();
+            } catch (e) {
+                console.warn('销毁旧趋势分析图表出错:', e);
+            }
+            window.chartObjects.trendAnalysisChart = null;
         }
         
         // 准备数据集
@@ -651,7 +676,7 @@ const ChartUtils = {
         ];
         
         // 创建图表
-        this.trendAnalysisChart = new Chart(ctx, {
+        window.chartObjects.trendAnalysisChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: timeSeriesData.map(d => d.timeLabel || ''),
@@ -853,12 +878,17 @@ const ChartUtils = {
             });
             
             // 销毁现有图表
-            if (this.pcrComparisonChart) {
-                this.pcrComparisonChart.destroy();
+            if (window.chartObjects && window.chartObjects.pcrComparisonChart) {
+                try {
+                    window.chartObjects.pcrComparisonChart.destroy();
+                } catch (e) {
+                    console.warn('销毁旧PCR对比图表出错:', e);
+                }
+                window.chartObjects.pcrComparisonChart = null;
             }
             
             // 创建图表
-            this.pcrComparisonChart = new Chart(ctx, {
+            window.chartObjects.pcrComparisonChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: pcrData.map(item => item.exchange),
@@ -929,12 +959,17 @@ const ChartUtils = {
             });
             
             // 销毁现有图表
-            if (this.volumeDistributionChart) {
-                this.volumeDistributionChart.destroy();
+            if (window.chartObjects && window.chartObjects.volumeDistributionChart) {
+                try {
+                    window.chartObjects.volumeDistributionChart.destroy();
+                } catch (e) {
+                    console.warn('销毁旧成交量分布图表出错:', e);
+                }
+                window.chartObjects.volumeDistributionChart = null;
             }
             
             // 创建图表
-            this.volumeDistributionChart = new Chart(ctx, {
+            window.chartObjects.volumeDistributionChart = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels: volumeData.map(item => item.exchange),
@@ -1001,12 +1036,17 @@ const ChartUtils = {
             });
             
             // 销毁现有图表
-            if (this.premiumSpreadChart) {
-                this.premiumSpreadChart.destroy();
+            if (window.chartObjects && window.chartObjects.premiumSpreadChart) {
+                try {
+                    window.chartObjects.premiumSpreadChart.destroy();
+                } catch (e) {
+                    console.warn('销毁旧权利金价差图表出错:', e);
+                }
+                window.chartObjects.premiumSpreadChart = null;
             }
             
             // 创建图表
-            this.premiumSpreadChart = new Chart(ctx, {
+            window.chartObjects.premiumSpreadChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: premiumData.map(item => item.exchange),
@@ -1979,13 +2019,18 @@ const VolumeAnalysisModule = {
             }
             
             // 销毁现有图表以避免内存泄漏和渲染问题
-            if (this.pcrComparisonChart) {
+            if (window.chartObjects && window.chartObjects.pcrComparisonChart) {
                 try {
-                    this.pcrComparisonChart.destroy();
+                    window.chartObjects.pcrComparisonChart.destroy();
                 } catch (e) {
                     console.warn('销毁旧PCR图表时出错:', e);
                 }
-                this.pcrComparisonChart = null;
+                window.chartObjects.pcrComparisonChart = null;
+            }
+            
+            // 确保全局图表对象存在
+            if (!window.chartObjects) {
+                window.chartObjects = {};
             }
             
             if (!exchangeData) {
@@ -2091,7 +2136,7 @@ const VolumeAnalysisModule = {
             });
             
             // 创建图表，提供更丰富的交互信息
-            this.pcrComparisonChart = new Chart(ctx, {
+            window.chartObjects.pcrComparisonChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: pcrData.map(item => item.exchange),
@@ -2183,13 +2228,18 @@ const VolumeAnalysisModule = {
             }
             
             // 销毁现有图表以避免内存泄漏和渲染问题
-            if (this.volumeDistributionChart) {
+            if (window.chartObjects && window.chartObjects.volumeDistributionChart) {
                 try {
-                    this.volumeDistributionChart.destroy();
+                    window.chartObjects.volumeDistributionChart.destroy();
                 } catch (e) {
                     console.warn('销毁旧成交量分布图表时出错:', e);
                 }
-                this.volumeDistributionChart = null;
+                window.chartObjects.volumeDistributionChart = null;
+            }
+            
+            // 确保全局图表对象存在
+            if (!window.chartObjects) {
+                window.chartObjects = {};
             }
             
             if (!exchangeData) {
@@ -2345,7 +2395,7 @@ const VolumeAnalysisModule = {
             // 创建图表配置
             const chartType = (exchanges.length === 1 && volumeData.some(item => item.isCallPut)) ? 'bar' : 'pie';
             
-            this.volumeDistributionChart = new Chart(ctx, {
+            window.chartObjects.volumeDistributionChart = new Chart(ctx, {
                 type: chartType,
                 data: {
                     labels: volumeData.map(item => item.exchange),
@@ -2427,13 +2477,18 @@ const VolumeAnalysisModule = {
             }
             
             // 销毁现有图表以避免内存泄漏和渲染问题
-            if (this.premiumSpreadChart) {
+            if (window.chartObjects && window.chartObjects.premiumSpreadChart) {
                 try {
-                    this.premiumSpreadChart.destroy();
+                    window.chartObjects.premiumSpreadChart.destroy();
                 } catch (e) {
                     console.warn('销毁旧溢价差异图表时出错:', e);
                 }
-                this.premiumSpreadChart = null;
+                window.chartObjects.premiumSpreadChart = null;
+            }
+            
+            // 确保全局图表对象存在
+            if (!window.chartObjects) {
+                window.chartObjects = {};
             }
             
             if (!exchangeData) {
@@ -2494,10 +2549,7 @@ const VolumeAnalysisModule = {
             // 所有交易所只使用真实数据，不再添加对比参考值
             console.log('使用真实交易所数据创建溢价差异图表，数据条数:', premiumData.length);
             
-            // 销毁现有图表
-            if (this.premiumSpreadChart) {
-                this.premiumSpreadChart.destroy();
-            }
+            // 销毁操作已在前面处理过，不需要重复
             
             // 准备数据集
             const labels = [...new Set(premiumData.map(item => item.exchange))];
@@ -2535,7 +2587,7 @@ const VolumeAnalysisModule = {
             );
             
             // 创建图表
-            this.premiumSpreadChart = new Chart(ctx, {
+            window.chartObjects.premiumSpreadChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
