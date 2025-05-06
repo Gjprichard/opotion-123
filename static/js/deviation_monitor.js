@@ -1988,28 +1988,17 @@ const VolumeAnalysisModule = {
             // 准备数据
             const exchanges = Object.keys(exchangeData);
             
-            // 如果没有交易所数据，显示提示信息但不退出
+            // 如果没有交易所数据，显示提示信息并退出
             if (exchanges.length === 0) {
-                console.warn('没有交易所数据可用于PCR对比图表，将使用默认数据');
-                // 创建默认示例数据，不退出，确保UI正常渲染
-                exchangeData = {
-                    'deribit': {
-                        call_volume: 0,
-                        put_volume: 0,
-                        ratio: 1.0,
-                        anomaly_calls: 0,
-                        anomaly_puts: 0
-                    }
-                };
-                exchanges.push('deribit');
+                console.warn('没有交易所数据可用于PCR对比图表');
+                return;
             }
             
             // 准备图表数据
             let pcrData = [];
             
-            // 如果只有一个交易所，添加有意义的参考数据
-            if (exchanges.length === 1) {
-                const exchange = exchanges[0];
+            // 遍历所有交易所，收集真实数据
+            exchanges.forEach(exchange => {
                 const data = exchangeData[exchange] || {ratio: 1.0};
                 // 使用安全获取ratio的方式，确保始终有有效值
                 const ratio = typeof data.ratio === 'number' && !isNaN(data.ratio) ? data.ratio : 1.0;
@@ -2021,51 +2010,9 @@ const VolumeAnalysisModule = {
                     isReal: true,
                     displayValue: ratio.toFixed(2)
                 });
-                
-                // 添加均衡参考数据点
-                pcrData.push({
-                    exchange: '均衡参考值',
-                    pcr: 1.0,
-                    isReal: false,
-                    displayValue: '1.00'
-                });
-                
-                // 添加市场趋势参考数据点 (根据当前比率偏离产生)
-                let marketRefValue;
-                if (ratio > 1.05) {
-                    // 当前偏向看跌，参考值偏向更为中性
-                    marketRefValue = Math.max(1.0, ratio * 0.85);
-                } else if (ratio < 0.95) {
-                    // 当前偏向看涨，参考值偏向更为中性
-                    marketRefValue = Math.min(1.0, ratio * 1.15);
-                } else {
-                    // 当前比较中性，制造轻微对比
-                    marketRefValue = ratio > 1.0 ? ratio * 0.9 : ratio * 1.1;
-                }
-                
-                pcrData.push({
-                    exchange: '市场参考值',
-                    pcr: marketRefValue,
-                    isReal: false,
-                    displayValue: marketRefValue.toFixed(2)
-                });
-                
-                console.log('单交易所模式，已添加参考值数据:', pcrData);
-            } else {
-                // 多交易所模式：使用所有真实交易所数据
-                pcrData = exchanges.map(exchange => {
-                    const data = exchangeData[exchange] || {ratio: 1.0};
-                    // 确保ratio是有效数值
-                    const ratio = typeof data.ratio === 'number' && !isNaN(data.ratio) ? data.ratio : 1.0;
-                    return {
-                        exchange: exchange.charAt(0).toUpperCase() + exchange.slice(1),
-                        pcr: ratio,
-                        isReal: true,
-                        displayValue: ratio.toFixed(2)
-                    };
-                });
-                console.log('多交易所模式，使用真实数据:', pcrData);
-            }
+            });
+            
+            console.log('使用真实交易所数据:', pcrData);
             
             // 销毁现有图表以避免内存泄漏
             if (this.pcrComparisonChart) {
@@ -2194,20 +2141,10 @@ const VolumeAnalysisModule = {
             // 准备数据
             const exchanges = Object.keys(exchangeData);
             
-            // 如果没有交易所数据，显示提示但不退出
+            // 如果没有交易所数据，显示提示并退出
             if (exchanges.length === 0) {
-                console.warn('没有交易所数据可用于成交量分布图表，将使用默认数据');
-                // 创建默认示例数据以确保UI正常显示
-                exchangeData = {
-                    'deribit': {
-                        call_volume: 0,
-                        put_volume: 0,
-                        ratio: 1.0,
-                        anomaly_calls: 0,
-                        anomaly_puts: 0
-                    }
-                };
-                exchanges.push('deribit');
+                console.warn('没有交易所数据可用于成交量分布图表');
+                return;
             }
             
             let volumeData = [];
@@ -2437,20 +2374,10 @@ const VolumeAnalysisModule = {
             // 准备数据 - 从交易所数据中提取看涨和看跌期权数据
             const exchanges = Object.keys(exchangeData);
             
-            // 如果没有交易所数据，显示提示但不退出
+            // 如果没有交易所数据，显示提示并退出
             if (exchanges.length === 0) {
-                console.warn('没有交易所数据可用于溢价差异图表，将使用默认数据');
-                // 创建默认示例数据以确保UI正常显示
-                exchangeData = {
-                    'deribit': {
-                        call_volume: 100,
-                        put_volume: 100,
-                        ratio: 1.0,
-                        anomaly_calls: 0,
-                        anomaly_puts: 0
-                    }
-                };
-                exchanges.push('deribit');
+                console.warn('没有交易所数据可用于溢价差异图表');
+                return;
             }
             
             let premiumData = [];
@@ -2492,42 +2419,8 @@ const VolumeAnalysisModule = {
                 });
             });
             
-            // 如果只有一个交易所，添加对比数据点
-            if (!isMultipleExchanges && premiumData.length > 0) {
-                // 获取基础溢价值用于计算对比值
-                const baseCallPremium = premiumData.find(d => d.type === 'Call')?.premium || 0.04;
-                const basePutPremium = premiumData.find(d => d.type === 'Put')?.premium || 0.05;
-                
-                // 添加行业平均参考值（假设的市场均值）
-                premiumData.push({
-                    exchange: '行业平均',
-                    type: 'Call',
-                    premium: baseCallPremium * 0.85, // 稍低于当前交易所
-                    isReal: false
-                });
-                
-                premiumData.push({
-                    exchange: '行业平均',
-                    type: 'Put',
-                    premium: basePutPremium * 0.85, // 稍低于当前交易所
-                    isReal: false
-                });
-                
-                // 添加极端情况参考值
-                premiumData.push({
-                    exchange: '极端市场',
-                    type: 'Call',
-                    premium: baseCallPremium * 1.5, // 显著高于当前
-                    isReal: false
-                });
-                
-                premiumData.push({
-                    exchange: '极端市场',
-                    type: 'Put',
-                    premium: basePutPremium * 1.5, // 显著高于当前
-                    isReal: false
-                });
-            }
+            // 所有交易所只使用真实数据，不再添加对比参考值
+            console.log('使用真实交易所数据创建溢价差异图表，数据条数:', premiumData.length);
             
             // 销毁现有图表
             if (this.premiumSpreadChart) {
