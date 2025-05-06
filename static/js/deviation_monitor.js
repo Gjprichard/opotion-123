@@ -2353,12 +2353,13 @@ const VolumeAnalysisModule = {
             }
             
             // 销毁现有图表以避免内存泄漏
-            if (this.volumeDistributionChart) {
+            if (window.chartObjects && window.chartObjects.volumeDistributionChart) {
                 try {
-                    this.volumeDistributionChart.destroy();
+                    window.chartObjects.volumeDistributionChart.destroy();
                 } catch (e) {
                     console.warn('销毁旧成交量分布图表时出错:', e);
                 }
+                window.chartObjects.volumeDistributionChart = null;
             }
             
             // 创建视觉样式 - 使用更一致的颜色方案
@@ -2866,6 +2867,11 @@ const VolumeAnalysisModule = {
         const callPutRatios = [];
         const marketPrices = [];
         
+        // 为每个交易所创建单独的比率数组
+        const deribitRatios = [];
+        const binanceRatios = [];
+        const okxRatios = [];
+        
         // 获取历史数据
         for (const item of history) {
             timestamps.push(item.timestamp);
@@ -2873,6 +2879,49 @@ const VolumeAnalysisModule = {
             putVolumes.push(item.put_volume || 0);
             callPutRatios.push(item.call_put_ratio || 1.0);
             marketPrices.push(item.market_price || 0);
+            
+            // 添加各交易所的数据，如果存在的话
+            if (item.exchange_data) {
+                // Deribit数据
+                if (item.exchange_data.deribit) {
+                    const dData = item.exchange_data.deribit;
+                    const dCallVol = dData.call_volume || 0;
+                    const dPutVol = dData.put_volume || 0;
+                    // 计算比率，避免除以零的情况
+                    const dRatio = dPutVol > 0 ? dCallVol / dPutVol : 1.0;
+                    deribitRatios.push(dRatio);
+                } else {
+                    // 如果没有数据，使用null来保持数据点与时间戳对齐
+                    deribitRatios.push(null);
+                }
+                
+                // Binance数据
+                if (item.exchange_data.binance) {
+                    const bData = item.exchange_data.binance;
+                    const bCallVol = bData.call_volume || 0;
+                    const bPutVol = bData.put_volume || 0;
+                    const bRatio = bPutVol > 0 ? bCallVol / bPutVol : 1.0;
+                    binanceRatios.push(bRatio);
+                } else {
+                    binanceRatios.push(null);
+                }
+                
+                // OKX数据
+                if (item.exchange_data.okx) {
+                    const oData = item.exchange_data.okx;
+                    const oCallVol = oData.call_volume || 0;
+                    const oPutVol = oData.put_volume || 0;
+                    const oRatio = oPutVol > 0 ? oCallVol / oPutVol : 1.0;
+                    okxRatios.push(oRatio);
+                } else {
+                    okxRatios.push(null);
+                }
+            } else {
+                // 如果完全没有交易所数据，所有交易所添加null值
+                deribitRatios.push(null);
+                binanceRatios.push(null);
+                okxRatios.push(null);
+            }
         }
         
         return {
@@ -2880,7 +2929,11 @@ const VolumeAnalysisModule = {
             call_volumes: callVolumes,
             put_volumes: putVolumes,
             call_put_ratios: callPutRatios,
-            market_prices: marketPrices
+            market_prices: marketPrices,
+            // 添加每个交易所的比率数据
+            deribit_ratios: deribitRatios,
+            binance_ratios: binanceRatios,
+            okx_ratios: okxRatios
         };
     },
     
@@ -2905,30 +2958,45 @@ const VolumeAnalysisModule = {
         }
         
         // 如果图表已存在，销毁它以避免内存泄漏
-        if (this.exchangeVolumeChart) {
+        if (window.chartObjects && window.chartObjects.exchangeVolumeChart) {
             try {
-                this.exchangeVolumeChart.destroy();
+                window.chartObjects.exchangeVolumeChart.destroy();
             } catch (e) {
                 console.warn('销毁旧交易所成交量对比图表时出错:', e);
             }
+            window.chartObjects.exchangeVolumeChart = null;
         }
         
+        // 为每个交易所增加数据标签
+        const labels = data.exchanges.map(exchange => 
+            exchange.charAt(0).toUpperCase() + exchange.slice(1)
+        );
+        
+        // 格式化数字，添加千位分隔符
+        const formattedCallVolumes = data.call_volumes.map(vol => 
+            typeof vol === 'number' ? vol : 0
+        );
+        
+        const formattedPutVolumes = data.put_volumes.map(vol => 
+            typeof vol === 'number' ? vol : 0
+        );
+        
         // 创建新图表
-        this.exchangeVolumeChart = new Chart(ctx, {
+        window.chartObjects.exchangeVolumeChart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: data.exchanges,
+                labels: labels,
                 datasets: [
                     {
                         label: '看涨期权成交量',
-                        data: data.call_volumes,
+                        data: formattedCallVolumes,
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
                         borderColor: 'rgba(40, 167, 69, 1)',
                         borderWidth: 1
                     },
                     {
                         label: '看跌期权成交量',
-                        data: data.put_volumes,
+                        data: formattedPutVolumes,
                         backgroundColor: 'rgba(220, 53, 69, 0.7)',
                         borderColor: 'rgba(220, 53, 69, 1)',
                         borderWidth: 1
@@ -2962,7 +3030,7 @@ const VolumeAnalysisModule = {
                             label: function(context) {
                                 const label = context.dataset.label || '';
                                 const value = context.raw;
-                                return `${label}: ${value}`;
+                                return `${label}: ${value.toLocaleString()}`;
                             }
                         }
                     }
@@ -2979,39 +3047,94 @@ const VolumeAnalysisModule = {
         const ctx = document.getElementById('volume-trend-chart').getContext('2d');
         
         // 如果图表已存在，安全销毁它
-        if (this.volumeTrendChart) {
+        if (window.chartObjects && window.chartObjects.volumeTrendChart) {
             try {
-                this.volumeTrendChart.destroy();
+                window.chartObjects.volumeTrendChart.destroy();
             } catch (e) {
                 console.warn('销毁旧成交量趋势图表时出错:', e);
             }
+            window.chartObjects.volumeTrendChart = null;
+        }
+
+        // 确保数据有效性
+        if (!data || !data.timestamps || data.timestamps.length === 0) {
+            console.warn('成交量趋势图数据无效或为空');
+            return;
+        }
+
+        console.log('准备渲染成交量趋势图数据:', data);
+        
+        // 准备多交易所数据集
+        const datasets = [];
+        
+        // 添加看涨/看跌比率 (所有交易所合计)
+        datasets.push({
+            label: '看涨/看跌比率',
+            data: data.call_put_ratios,
+            borderColor: 'rgba(255, 193, 7, 1)',
+            backgroundColor: 'rgba(255, 193, 7, 0.2)',
+            yAxisID: 'y1',
+            tension: 0.3,
+            fill: false
+        });
+        
+        // 添加市场价格
+        datasets.push({
+            label: '市场价格',
+            data: data.market_prices,
+            borderColor: 'rgba(13, 110, 253, 1)',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            yAxisID: 'y',
+            tension: 0.3,
+            fill: false
+        });
+        
+        // 添加各交易所看涨/看跌比率
+        if (data.deribit_ratios && data.deribit_ratios.length > 0) {
+            datasets.push({
+                label: 'Deribit比率',
+                data: data.deribit_ratios,
+                borderColor: 'rgba(54, 162, 235, 1)',
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                yAxisID: 'y1',
+                borderDash: [5, 5],
+                tension: 0.3,
+                fill: false
+            });
+        }
+        
+        if (data.binance_ratios && data.binance_ratios.length > 0) {
+            datasets.push({
+                label: 'Binance比率',
+                data: data.binance_ratios,
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                yAxisID: 'y1',
+                borderDash: [5, 5],
+                tension: 0.3,
+                fill: false
+            });
+        }
+        
+        if (data.okx_ratios && data.okx_ratios.length > 0) {
+            datasets.push({
+                label: 'OKX比率',
+                data: data.okx_ratios,
+                borderColor: 'rgba(255, 206, 86, 1)',
+                backgroundColor: 'rgba(255, 206, 86, 0.2)',
+                yAxisID: 'y1',
+                borderDash: [5, 5],
+                tension: 0.3,
+                fill: false
+            });
         }
         
         // 创建新图表
-        this.volumeTrendChart = new Chart(ctx, {
+        window.chartObjects.volumeTrendChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: data.timestamps,
-                datasets: [
-                    {
-                        label: '看涨/看跌比率',
-                        data: data.call_put_ratios,
-                        borderColor: 'rgba(255, 193, 7, 1)',
-                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
-                        yAxisID: 'y1',
-                        tension: 0.3,
-                        fill: false
-                    },
-                    {
-                        label: '市场价格',
-                        data: data.market_prices,
-                        borderColor: 'rgba(13, 110, 253, 1)',
-                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                        yAxisID: 'y',
-                        tension: 0.3,
-                        fill: false
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -3044,7 +3167,14 @@ const VolumeAnalysisModule = {
                             label: function(context) {
                                 const label = context.dataset.label || '';
                                 const value = context.raw;
-                                return `${label}: ${value}`;
+                                // 格式化不同类型的值
+                                if (label.includes('价格')) {
+                                    return `${label}: $${value.toLocaleString()}`;
+                                } else if (label.includes('比率')) {
+                                    return `${label}: ${value.toFixed(2)}`;
+                                } else {
+                                    return `${label}: ${value}`;
+                                }
                             }
                         }
                     }
