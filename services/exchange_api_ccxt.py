@@ -220,18 +220,26 @@ def is_expiry_within_7_days(expiry_timestamp):
     返回:
     bool - 是否在7天内到期
     """
-    if not expiry_timestamp:
+    # 处理None值或0值
+    if expiry_timestamp is None or expiry_timestamp == 0:
         return False
         
-    # 计算7天后的时间戳
-    seven_days_later = datetime.utcnow() + timedelta(days=7)
-    seven_days_later_ts = seven_days_later.timestamp() * 1000  # 转换为毫秒
-    
-    # 当前时间戳
-    now_ts = datetime.utcnow().timestamp() * 1000  # 转换为毫秒
-    
-    # 检查到期时间是否在当前时间到7天后之间
-    return now_ts <= expiry_timestamp <= seven_days_later_ts
+    try:
+        # 确保expiry_timestamp是一个数字
+        expiry_ts = float(expiry_timestamp)
+        
+        # 计算7天后的时间戳
+        seven_days_later = datetime.utcnow() + timedelta(days=7)
+        seven_days_later_ts = seven_days_later.timestamp() * 1000  # 转换为毫秒
+        
+        # 当前时间戳
+        now_ts = datetime.utcnow().timestamp() * 1000  # 转换为毫秒
+        
+        # 检查到期时间是否在当前时间到7天后之间
+        return now_ts <= expiry_ts <= seven_days_later_ts
+    except (TypeError, ValueError) as e:
+        logger.warning(f"处理到期时间戳时出错: {e}，值: {expiry_timestamp}")
+        return False
 
 def get_option_market_data(symbol, exchange_id='deribit'):
     """
@@ -346,9 +354,21 @@ def _get_deribit_options(symbol, current_price, strike_min, strike_max, exchange
                             continue
                         
                         # 基本信息处理
-                        expiry_date = datetime.fromtimestamp(option['expiry'] / 1000).date()
-                        option_type = option['optionType']  # 'call' 或 'put'
-                        strike_price = option['strike']
+                        try:
+                            expiry_date = datetime.fromtimestamp(option['expiry'] / 1000).date()
+                        except (TypeError, ValueError) as e:
+                            logger.warning(f"无法处理Deribit期权{option['symbol']}的到期日: {e}")
+                            continue
+                            
+                        option_type = option.get('optionType', '')  # 'call' 或 'put'
+                        if not option_type or option_type not in ['call', 'put']:
+                            logger.warning(f"Deribit期权{option['symbol']}的期权类型无效: {option_type}")
+                            continue
+                            
+                        strike_price = option.get('strike')
+                        if not strike_price:
+                            logger.warning(f"Deribit期权{option['symbol']}的执行价无效")
+                            continue
                         
                         # 计算价格
                         option_price = None
@@ -356,13 +376,25 @@ def _get_deribit_options(symbol, current_price, strike_min, strike_max, exchange
                             option_price = (ticker['bid'] + ticker['ask']) / 2
                         elif ticker.get('markPrice'):
                             option_price = ticker['markPrice']
+                        elif ticker.get('last'):
+                            option_price = ticker['last']
                         else:
-                            continue  # 跳过没有价格的期权
+                            # 使用info里的mark_price字段作为最后尝试
+                            option_price = ticker.get('info', {}).get('mark_price')
+                            
+                        # 如果仍然没有价格，跳过
+                        if not option_price:
+                            logger.warning(f"无法获取Deribit期权{option['symbol']}的价格")
+                            continue
+                            
+                        try:
+                            option_price = float(option_price)
+                        except (TypeError, ValueError):
+                            logger.warning(f"Deribit期权{option['symbol']}的价格转换失败: {option_price}")
+                            continue
                         
-                        # 只关注有成交量的期权
-                        volume = ticker.get('baseVolume', 0)
-                        if volume <= 0:
-                            continue  # 跳过无成交量的期权
+                        # 处理成交量，即使成交量为0也保留
+                        volume = ticker.get('baseVolume', 0) or 0  # 确保None转为0
                             
                         open_interest = ticker.get('info', {}).get('open_interest', 0)
                         
@@ -446,21 +478,69 @@ def _get_binance_options(symbol, current_price, strike_min, strike_max, exchange
                     continue
                 
                 # 提取基本信息
-                expiry_date = datetime.fromtimestamp(option.get('expiry', 0) / 1000).date() if option.get('expiry') else None
-                option_type = option.get('info', {}).get('optionType', '').lower()  # 币安格式可能不同
-                if option_type not in ['call', 'put']:
+                try:
+                    expiry_date = datetime.fromtimestamp(option.get('expiry', 0) / 1000).date() if option.get('expiry') else None
+                    if not expiry_date:
+                        logger.warning(f"Binance期权{option.get('symbol', '')}没有有效的到期日")
+                        continue
+                except (TypeError, ValueError) as e:
+                    logger.warning(f"无法处理Binance期权{option.get('symbol', '')}的到期日: {e}")
                     continue
                     
-                strike_price = option.get('strike', 0)
+                # 获取期权类型    
+                option_type = option.get('info', {}).get('optionType', '').lower()  # 币安格式可能不同
+                if not option_type or option_type not in ['call', 'put']:
+                    # 尝试从符号中解析期权类型
+                    symbol_str = option.get('symbol', '')
+                    if 'CALL' in symbol_str.upper():
+                        option_type = 'call'
+                    elif 'PUT' in symbol_str.upper():
+                        option_type = 'put'
+                    else:
+                        logger.warning(f"无法确定Binance期权{symbol_str}的类型")
+                        continue
+                    
+                # 获取执行价
+                strike_price = option.get('strike')
+                if not strike_price:
+                    logger.warning(f"Binance期权{option.get('symbol', '')}没有有效的执行价")
+                    continue
+                
+                try:
+                    strike_price = float(strike_price)
+                except (TypeError, ValueError):
+                    logger.warning(f"Binance期权{option.get('symbol', '')}的执行价无效: {strike_price}")
+                    continue
                 
                 # 计算价格
-                option_price = ticker.get('last', 0)
+                option_price = ticker.get('last')
                 if not option_price and ticker.get('bid') and ticker.get('ask'):
                     option_price = (ticker['bid'] + ticker['ask']) / 2
+                elif not option_price:  # 如果还是没有价格，尝试其他字段
+                    option_price = ticker.get('info', {}).get('markPrice')
                 
-                # 成交量和持仓量
-                volume = ticker.get('baseVolume', 0)
-                open_interest = ticker.get('info', {}).get('openInterest', 0)
+                if not option_price:
+                    logger.warning(f"无法获取Binance期权{option.get('symbol', '')}的价格")
+                    continue
+                    
+                try:
+                    option_price = float(option_price)
+                except (TypeError, ValueError):
+                    logger.warning(f"Binance期权{option.get('symbol', '')}的价格无效: {option_price}")
+                    continue
+                
+                # 成交量和持仓量 - 确保是数字类型
+                volume = ticker.get('baseVolume', 0) or 0
+                try:
+                    volume = float(volume)
+                except (TypeError, ValueError):
+                    volume = 0
+                    
+                open_interest = ticker.get('info', {}).get('openInterest', 0) or 0
+                try:
+                    open_interest = float(open_interest)
+                except (TypeError, ValueError):
+                    open_interest = 0
                 
                 # 隐含波动率和Greeks (币安可能使用不同的字段)
                 implied_volatility = ticker.get('info', {}).get('impliedVolatility', 0)
@@ -536,7 +616,14 @@ def _get_okx_options(symbol, current_price, strike_min, strike_max, exchange):
                     continue
                 
                 # 提取基本信息
-                expiry_date = datetime.fromtimestamp(option.get('expiry', 0) / 1000).date() if option.get('expiry') else None
+                try:
+                    expiry_date = datetime.fromtimestamp(option.get('expiry', 0) / 1000).date() if option.get('expiry') else None
+                    if not expiry_date:
+                        logger.warning(f"OKX期权{option.get('symbol', '')}没有有效的到期日")
+                        continue
+                except (TypeError, ValueError) as e:
+                    logger.warning(f"无法处理OKX期权{option.get('symbol', '')}的到期日: {e}")
+                    continue
                 
                 # OKX的期权类型可能在不同位置
                 option_type = None
@@ -552,18 +639,50 @@ def _get_okx_options(symbol, current_price, strike_min, strike_max, exchange):
                             option_type = 'put'
                 
                 if option_type not in ['call', 'put']:
+                    logger.warning(f"OKX期权{option.get('symbol', '')}的期权类型无效: {option_type}")
                     continue
                     
-                strike_price = option.get('strike', 0)
+                # 获取执行价
+                strike_price = option.get('strike')
+                if not strike_price:
+                    logger.warning(f"OKX期权{option.get('symbol', '')}没有有效的执行价")
+                    continue
+                
+                try:
+                    strike_price = float(strike_price)
+                except (TypeError, ValueError):
+                    logger.warning(f"OKX期权{option.get('symbol', '')}的执行价无效: {strike_price}")
+                    continue
                 
                 # 计算价格
-                option_price = ticker.get('last', 0)
+                option_price = ticker.get('last')
                 if not option_price and ticker.get('bid') and ticker.get('ask'):
                     option_price = (ticker['bid'] + ticker['ask']) / 2
+                elif not option_price:  # 如果还是没有价格，尝试其他字段
+                    option_price = ticker.get('info', {}).get('markPrice')
                 
-                # 成交量和持仓量
-                volume = ticker.get('baseVolume', 0)
-                open_interest = ticker.get('info', {}).get('openInterest', 0)
+                if not option_price:
+                    logger.warning(f"无法获取OKX期权{option.get('symbol', '')}的价格")
+                    continue
+                    
+                try:
+                    option_price = float(option_price)
+                except (TypeError, ValueError):
+                    logger.warning(f"OKX期权{option.get('symbol', '')}的价格无效: {option_price}")
+                    continue
+                
+                # 成交量和持仓量 - 确保是数字类型
+                volume = ticker.get('baseVolume', 0) or 0
+                try:
+                    volume = float(volume)
+                except (TypeError, ValueError):
+                    volume = 0
+                    
+                open_interest = ticker.get('info', {}).get('openInterest', 0) or 0
+                try:
+                    open_interest = float(open_interest)
+                except (TypeError, ValueError):
+                    open_interest = 0
                 
                 # 隐含波动率 (OKX可能使用不同的字段)
                 implied_volatility = ticker.get('info', {}).get('impliedVolatility', 0)

@@ -27,9 +27,9 @@ def fetch_latest_option_data(symbol):
         # 强制使用实时数据并只使用OKX交易所
         use_real_data = True
         
-        # 暂时只使用OKX交易所
-        enabled_exchanges = ['okx']
-        logger.info(f"Using real data from OKX exchange for {symbol}")
+        # 使用所有支持的交易所：Deribit, Binance, OKX
+        enabled_exchanges = ['deribit', 'binance', 'okx']
+        logger.info(f"Using real data from all supported exchanges for {symbol}")
             
         logger.info(f"Fetching {symbol} option data from exchanges: {', '.join(enabled_exchanges)}")
         
@@ -66,7 +66,7 @@ def fetch_latest_option_data(symbol):
         
         # 如果没有数据，返回错误
         if not all_option_data:
-            logger.error(f"No option data received from OKX exchange for {symbol}")
+            logger.error(f"No option data received from any exchange for {symbol}")
             return False
         
         logger.info(f"Total {len(all_option_data)} option contracts received for {symbol} from all exchanges")
