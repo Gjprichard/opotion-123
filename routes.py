@@ -626,6 +626,20 @@ def deviation_volume_analysis_api():
                     'ratio': 1.0,
                     'anomaly_calls': 0,
                     'anomaly_puts': 0
+                },
+                'binance': {
+                    'call_volume': 0,
+                    'put_volume': 0,
+                    'ratio': 1.0,
+                    'anomaly_calls': 0,
+                    'anomaly_puts': 0
+                },
+                'okx': {
+                    'call_volume': 0,
+                    'put_volume': 0,
+                    'ratio': 1.0,
+                    'anomaly_calls': 0,
+                    'anomaly_puts': 0
                 }
             }
             
@@ -667,6 +681,20 @@ def create_default_volume_data():
         },
         'exchange_data': {
             'deribit': {
+                'call_volume': 0,
+                'put_volume': 0,
+                'ratio': 1.0,
+                'anomaly_calls': 0,
+                'anomaly_puts': 0
+            },
+            'binance': {
+                'call_volume': 0,
+                'put_volume': 0,
+                'ratio': 1.0,
+                'anomaly_calls': 0,
+                'anomaly_puts': 0
+            },
+            'okx': {
                 'call_volume': 0,
                 'put_volume': 0,
                 'ratio': 1.0,
