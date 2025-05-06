@@ -1985,20 +1985,14 @@ const VolumeAnalysisModule = {
         try {
             console.log('创建PCR对比图表，使用数据:', exchangeData);
             
-            // 准备数据
-            const exchanges = Object.keys(exchangeData);
-            
-            // 如果没有交易所数据，显示提示信息并退出
-            if (exchanges.length === 0) {
-                console.warn('没有交易所数据可用于PCR对比图表');
-                return;
-            }
+            // 我们要确保显示所有交易所，即使某些交易所没有数据
+            const expectedExchanges = ['deribit', 'binance', 'okx'];
             
             // 准备图表数据
             let pcrData = [];
             
             // 遍历所有交易所，收集真实数据
-            exchanges.forEach(exchange => {
+            expectedExchanges.forEach(exchange => {
                 const data = exchangeData[exchange] || {ratio: 1.0};
                 // 使用安全获取ratio的方式，确保始终有有效值
                 const ratio = typeof data.ratio === 'number' && !isNaN(data.ratio) ? data.ratio : 1.0;
@@ -2138,16 +2132,17 @@ const VolumeAnalysisModule = {
         try {
             console.log('创建成交量分布图表，使用数据:', exchangeData);
             
-            // 准备数据
-            const exchanges = Object.keys(exchangeData);
+            // 确保显示所有交易所，即使某些交易所没有数据
+            const expectedExchanges = ['deribit', 'binance', 'okx'];
             
             // 如果没有交易所数据，显示提示并退出
-            if (exchanges.length === 0) {
+            if (!exchangeData) {
                 console.warn('没有交易所数据可用于成交量分布图表');
                 return;
             }
             
             let volumeData = [];
+            const exchanges = Object.keys(exchangeData);
             if (exchanges.length === 1) {
                 // 单个交易所场景 - 更丰富的数据展示
                 const exchange = exchanges[0];
@@ -2371,20 +2366,20 @@ const VolumeAnalysisModule = {
         try {
             console.log('创建溢价差异图表，使用数据:', exchangeData);
             
-            // 准备数据 - 从交易所数据中提取看涨和看跌期权数据
-            const exchanges = Object.keys(exchangeData);
+            // 确保显示所有交易所，即使某些交易所没有数据
+            const expectedExchanges = ['deribit', 'binance', 'okx'];
             
             // 如果没有交易所数据，显示提示并退出
-            if (exchanges.length === 0) {
+            if (!exchangeData) {
                 console.warn('没有交易所数据可用于溢价差异图表');
                 return;
             }
             
             let premiumData = [];
-            let isMultipleExchanges = exchanges.length > 1;
+            let isMultipleExchanges = true;
             
             // 对每个交易所，添加看涨和看跌两个数据点
-            exchanges.forEach(exchange => {
+            expectedExchanges.forEach(exchange => {
                 const data = exchangeData[exchange] || {call_volume: 0, put_volume: 0};
                 // 确保数据有效性
                 const callVolume = typeof data.call_volume === 'number' && !isNaN(data.call_volume) ? data.call_volume : 0;
@@ -2688,20 +2683,39 @@ const VolumeAnalysisModule = {
      * @returns {Object} 图表数据
      */
     prepareExchangeVolumeChartData(data) {
+        // 确保数据有效
+        if (!data || !data.exchange_data) {
+            console.warn('prepareExchangeVolumeChartData: 无效的数据', data);
+            return {
+                exchanges: [],
+                call_volumes: [],
+                put_volumes: []
+            };
+        }
+        
         const exchangeData = data.exchange_data || {};
-        const exchanges = Object.keys(exchangeData);
+        
+        // 我们要确保有所有交易所，即使某些交易所可能没有数据
+        const expectedExchanges = ['deribit', 'binance', 'okx'];
         const callVolumes = [];
         const putVolumes = [];
         
-        // 格式化交易所名称
-        const formattedExchanges = exchanges.map(name => name.charAt(0).toUpperCase() + name.slice(1));
+        // 格式化交易所名称（首字母大写）
+        const formattedExchanges = expectedExchanges.map(name => name.charAt(0).toUpperCase() + name.slice(1));
         
         // 获取每个交易所的看涨/看跌成交量
-        for (const exchange of exchanges) {
+        for (const exchange of expectedExchanges) {
             const exchangeInfo = exchangeData[exchange] || {};
             callVolumes.push(exchangeInfo.call_volume || 0);
             putVolumes.push(exchangeInfo.put_volume || 0);
         }
+        
+        // 添加调试日志
+        console.log('预处理后的交易所多空成交量对比数据:', {
+            exchanges: formattedExchanges,
+            call_volumes: callVolumes,
+            put_volumes: putVolumes
+        });
         
         return {
             exchanges: formattedExchanges,
@@ -2746,7 +2760,20 @@ const VolumeAnalysisModule = {
      * @param {Object} data - 图表数据
      */
     updateExchangeVolumeChart(data) {
-        const ctx = document.getElementById('exchange-volume-chart').getContext('2d');
+        const ctx = document.getElementById('exchange-volume-chart');
+        if (!ctx) {
+            console.warn('找不到exchange-volume-chart元素');
+            return;
+        }
+        
+        // 添加调试日志
+        console.log('交易所多空成交量对比图表数据:', data);
+        
+        // 检查数据完整性
+        if (!data || !data.exchanges || !data.call_volumes || !data.put_volumes) {
+            console.warn('交易所多空成交量对比图表数据不完整:', data);
+            return;
+        }
         
         // 如果图表已存在，销毁它以避免内存泄漏
         if (this.exchangeVolumeChart) {
