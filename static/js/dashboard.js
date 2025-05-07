@@ -20,12 +20,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化图表
     loadDashboardData(selectedSymbol, 30, selectedTimePeriod);
 
-    // 设置自动刷新（每5分钟）
+    // 设置自动刷新（每10分钟）与后端计算频率一致
     setInterval(function() {
         const currentSymbol = document.getElementById('symbol-selector').value || 'BTC';
         const currentTimePeriod = document.getElementById('time-period-selector').value || '15m';
         loadDashboardData(currentSymbol, 30, currentTimePeriod);
-    }, 300000); // Changed to 5 minutes (300000ms)
+    }, 600000); // Changed to 10 minutes (600000ms)
 });
 
 // 设置所有事件监听器
@@ -126,16 +126,23 @@ function setupEventListeners() {
 function loadDashboardData(symbol, days = 30, timePeriod = '15m') {
     console.log(`加载${symbol}的最近${days}天数据，时间周期：${timePeriod}...`);
 
-    // 显示加载指示器
+    // 获取图表容器
     const riskChartContainer = document.getElementById('risk-chart-container');
     const reflexivityChartContainer = document.getElementById('reflexivity-chart-container');
-
-    if (riskChartContainer) {
+    
+    // 仅在首次加载或没有有效图表时显示加载指示器
+    if (riskChartContainer && (!window.chartObjects || !window.chartObjects.riskChart)) {
         riskChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     }
 
-    if (reflexivityChartContainer) {
+    if (reflexivityChartContainer && (!window.chartObjects || !window.chartObjects.reflexivityChart)) {
         reflexivityChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    }
+
+    // 显示刷新状态 - 仅在页面顶部提示，不干扰图表
+    const lastUpdateElement = document.getElementById('last-update-time');
+    if (lastUpdateElement) {
+        lastUpdateElement.innerHTML = '<small><i class="fas fa-sync-alt fa-spin"></i> 正在获取数据...</small>';
     }
 
     // 调用API获取数据，包含时间周期
@@ -152,32 +159,48 @@ function loadDashboardData(symbol, days = 30, timePeriod = '15m') {
             // 存储数据以供后续使用
             symbolsData[symbol] = data;
 
-            // 清除加载指示器
-            if (riskChartContainer) {
+            // 仅在没有有效图表时重建容器
+            if (riskChartContainer && (!window.chartObjects || !window.chartObjects.riskChart)) {
                 riskChartContainer.innerHTML = '<canvas id="risk-chart"></canvas>';
             }
 
-            if (reflexivityChartContainer) {
+            if (reflexivityChartContainer && (!window.chartObjects || !window.chartObjects.reflexivityChart)) {
                 reflexivityChartContainer.innerHTML = '<canvas id="reflexivity-chart"></canvas>';
             }
 
-            // 创建图表
+            // 创建或更新图表
             createRiskChart(data);
             createReflexivityChart(data);
 
             // 更新市场情绪和风险指标显示
             updateRiskIndicators(symbol, data);
+            
+            // 更新最后刷新时间
+            if (lastUpdateElement) {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString();
+                lastUpdateElement.innerHTML = `<small>最后更新: ${timeString}</small>`;
+            }
         })
         .catch(error => {
             console.error('获取仪表盘数据出错:', error);
 
-            if (riskChartContainer) {
+            // 保留现有图表，仅显示错误信息提示
+            if (lastUpdateElement) {
+                lastUpdateElement.innerHTML = '<small class="text-danger"><i class="fas fa-exclamation-triangle"></i> 数据获取失败</small>';
+            }
+            
+            // 只有在没有图表的情况下才显示错误提示替代图表
+            if (riskChartContainer && (!window.chartObjects || !window.chartObjects.riskChart)) {
                 riskChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错</div>';
             }
 
-            if (reflexivityChartContainer) {
+            if (reflexivityChartContainer && (!window.chartObjects || !window.chartObjects.reflexivityChart)) {
                 reflexivityChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错</div>';
             }
+            
+            // 显示错误通知
+            showToast('获取数据失败，将在下次自动刷新时重试', 'warning');
         });
 }
 
