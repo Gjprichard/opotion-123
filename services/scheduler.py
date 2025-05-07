@@ -41,61 +41,76 @@ def fetch_option_data():
     """只获取期权数据，不进行计算"""
     logger.info("正在执行计划任务: 获取最新期权数据")
     
-    for symbol in Config.TRACKED_SYMBOLS:
-        try:
-            # 只获取期权数据
-            success = fetch_latest_option_data(symbol)
-            
-            if success:
-                logger.info(f"已成功获取 {symbol} 的最新期权数据")
-            else:
-                logger.warning(f"获取 {symbol} 期权数据失败")
+    # 导入应用实例以使用应用上下文
+    from app import app
+    
+    # 在应用上下文中执行数据库操作
+    with app.app_context():
+        for symbol in Config.TRACKED_SYMBOLS:
+            try:
+                # 只获取期权数据
+                success = fetch_latest_option_data(symbol)
                 
-            # 添加小延迟，避免对数据源造成过大压力
-            time.sleep(1)
-            
-        except Exception as e:
-            logger.error(f"获取 {symbol} 期权数据时出错: {str(e)}")
+                if success:
+                    logger.info(f"已成功获取 {symbol} 的最新期权数据")
+                else:
+                    logger.warning(f"获取 {symbol} 期权数据失败")
+                    
+                # 添加小延迟，避免对数据源造成过大压力
+                time.sleep(1)
+                
+            except Exception as e:
+                logger.error(f"获取 {symbol} 期权数据时出错: {str(e)}")
 
 def calculate_all_data():
     """只计算风险指标和偏离指标，不获取新数据"""
     logger.info("正在执行计划任务: 计算风险指标和偏离指标")
     
-    for symbol in Config.TRACKED_SYMBOLS:
-        try:
-            # 计算风险指标
-            calculate_risk_indicators(symbol)
-            
-            # 计算期权执行价偏离指标
-            calculate_deviation_metrics(symbol)
-            
-            logger.info(f"已成功计算 {symbol} 的风险指标和偏离指标")
+    # 导入应用实例以使用应用上下文
+    from app import app
+    
+    # 在应用上下文中执行数据库操作
+    with app.app_context():
+        for symbol in Config.TRACKED_SYMBOLS:
+            try:
+                # 计算风险指标
+                calculate_risk_indicators(symbol)
                 
-        except Exception as e:
-            logger.error(f"计算 {symbol} 指标时出错: {str(e)}")
+                # 计算期权执行价偏离指标
+                calculate_deviation_metrics(symbol)
+                
+                logger.info(f"已成功计算 {symbol} 的风险指标和偏离指标")
+                    
+            except Exception as e:
+                logger.error(f"计算 {symbol} 指标时出错: {str(e)}")
 
 def update_all_option_data():
     """兼容旧代码的函数，同时获取数据并计算指标"""
     logger.info("Running scheduled update of option data")
     
-    for symbol in Config.TRACKED_SYMBOLS:
-        try:
-            # Fetch new option data
-            success = fetch_latest_option_data(symbol)
-            
-            if success:
-                # Calculate risk indicators
-                calculate_risk_indicators(symbol)
+    # 导入应用实例以使用应用上下文
+    from app import app
+    
+    # 在应用上下文中执行数据库操作
+    with app.app_context():
+        for symbol in Config.TRACKED_SYMBOLS:
+            try:
+                # Fetch new option data
+                success = fetch_latest_option_data(symbol)
                 
-                # Calculate strike price deviation metrics
-                calculate_deviation_metrics(symbol)
+                if success:
+                    # Calculate risk indicators
+                    calculate_risk_indicators(symbol)
+                    
+                    # Calculate strike price deviation metrics
+                    calculate_deviation_metrics(symbol)
+                    
+                    logger.info(f"Updated option data, risk indicators and deviation metrics for {symbol}")
+                else:
+                    logger.warning(f"Failed to update option data for {symbol}")
+                    
+                # Add a small delay between symbols to avoid overwhelming the data source
+                time.sleep(1)
                 
-                logger.info(f"Updated option data, risk indicators and deviation metrics for {symbol}")
-            else:
-                logger.warning(f"Failed to update option data for {symbol}")
-                
-            # Add a small delay between symbols to avoid overwhelming the data source
-            time.sleep(1)
-            
-        except Exception as e:
-            logger.error(f"Error updating option data for {symbol}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error updating option data for {symbol}: {str(e)}")

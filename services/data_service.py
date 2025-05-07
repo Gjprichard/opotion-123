@@ -166,9 +166,9 @@ def fetch_latest_option_data(symbol):
         from app import db
         from models import ApiCredential
 
-        # 使用所有支持的交易所：Deribit, Binance, OKX
-        enabled_exchanges = ['deribit', 'binance', 'okx']
-        logger.info(f"Using real data from all supported exchanges for {symbol}")
+        # 使用可访问的支持交易所：Deribit, OKX (Binance可能受地区限制)
+        enabled_exchanges = ['deribit', 'okx']
+        logger.info(f"Using real data from accessible supported exchanges for {symbol}")
 
         logger.info(f"Fetching {symbol} option data from exchanges: {', '.join(enabled_exchanges)}")
 
