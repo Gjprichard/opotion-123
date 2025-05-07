@@ -209,11 +209,29 @@ class ExchangeAPI:
                 
                 # 根据交易所格式化交易对
                 if exchange_id == 'deribit':
-                    market_symbol = f"{symbol}-PERPETUAL"
+                    # Deribit使用BTC-PERPETUAL或ETH-PERPETUAL格式
+                    if symbol == 'BTC' or symbol == 'BTC-USD':
+                        market_symbol = "BTC-PERPETUAL"
+                    elif symbol == 'ETH' or symbol == 'ETH-USD':
+                        market_symbol = "ETH-PERPETUAL"
+                    else:
+                        return None
                 elif exchange_id == 'okx':
-                    market_symbol = f"{symbol}-USDT-SWAP"
+                    # OKX使用BTC-USDT-SWAP格式
+                    if symbol.startswith('BTC'):
+                        market_symbol = "BTC-USDT-SWAP"
+                    elif symbol.startswith('ETH'):
+                        market_symbol = "ETH-USDT-SWAP"
+                    else:
+                        market_symbol = f"{symbol}-USDT-SWAP"
                 elif exchange_id == 'binance':
-                    market_symbol = f"{symbol}/USDT"
+                    # Binance使用BTC/USDT格式
+                    if symbol.startswith('BTC'):
+                        market_symbol = "BTC/USDT"
+                    elif symbol.startswith('ETH'):
+                        market_symbol = "ETH/USDT"
+                    else:
+                        market_symbol = f"{symbol}/USDT"
                 else:
                     return None
                 
@@ -243,15 +261,33 @@ class ExchangeAPI:
             # 获取当前价格
             # 根据交易所格式化交易对
             if exchange_id == 'deribit':
-                ticker = exchange.fetch_ticker(f"{symbol}-PERPETUAL")
+                # Deribit使用BTC-PERPETUAL或ETH-PERPETUAL格式
+                if symbol == 'BTC' or symbol == 'BTC-USD':
+                    ticker = exchange.fetch_ticker("BTC-PERPETUAL")
+                elif symbol == 'ETH' or symbol == 'ETH-USD':
+                    ticker = exchange.fetch_ticker("ETH-PERPETUAL")
+                else:
+                    return None
                 return float(ticker['last'])
                 
             elif exchange_id == 'okx':
-                ticker = exchange.fetch_ticker(f"{symbol}-USDT-SWAP")
+                # OKX使用BTC-USDT-SWAP格式
+                if symbol.startswith('BTC'):
+                    ticker = exchange.fetch_ticker("BTC-USDT-SWAP")
+                elif symbol.startswith('ETH'):
+                    ticker = exchange.fetch_ticker("ETH-USDT-SWAP")
+                else:
+                    ticker = exchange.fetch_ticker(f"{symbol}-USDT-SWAP")
                 return float(ticker['last'])
                 
             elif exchange_id == 'binance':
-                ticker = exchange.fetch_ticker(f"{symbol}/USDT")
+                # Binance使用BTC/USDT格式
+                if symbol.startswith('BTC'):
+                    ticker = exchange.fetch_ticker("BTC/USDT")
+                elif symbol.startswith('ETH'):
+                    ticker = exchange.fetch_ticker("ETH/USDT")
+                else:
+                    ticker = exchange.fetch_ticker(f"{symbol}/USDT")
                 return float(ticker['last'])
             
             return None

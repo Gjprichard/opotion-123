@@ -456,11 +456,11 @@ class RiskService:
             from services.exchange_api import ExchangeAPI
             exchange_api = ExchangeAPI()
             if indicator.symbol == 'BTC':
-                price = exchange_api.get_underlying_price('deribit', 'BTC-USD')
-                prev_price = exchange_api.get_underlying_price('deribit', 'BTC-USD', '1d')
+                price = exchange_api.get_underlying_price('deribit', 'BTC')
+                prev_price = exchange_api.get_underlying_price('deribit', 'BTC', '1d')
             elif indicator.symbol == 'ETH':
-                price = exchange_api.get_underlying_price('deribit', 'ETH-USD')
-                prev_price = exchange_api.get_underlying_price('deribit', 'ETH-USD', '1d')
+                price = exchange_api.get_underlying_price('deribit', 'ETH')
+                prev_price = exchange_api.get_underlying_price('deribit', 'ETH', '1d')
             else:
                 price = 0
                 prev_price = 0
