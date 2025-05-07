@@ -1,0 +1,121 @@
+/* Custom CSS for the Options Market Risk Monitoring System */
+
+/* Main theme overrides */
+:root {
+    --custom-primary: #4e73df;
+    --custom-success: #1cc88a;
+    --custom-info: #36b9cc;
+    --custom-warning: #f6c23e;
+    --custom-danger: #e74a3b;
+    --custom-secondary: #858796;
+    --custom-light: #f8f9fc;
+    --custom-dark: #5a5c69;
+}
+
+/* Dashboard risk indicators */
+.risk-indicator {
+    height: 8px;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+/* Card styling */
+.risk-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.risk-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    font-weight: 700;
+}
+
+/* Alert styling */
+.alert-attention {
+    background-color: var(--bs-info);
+    color: white;
+}
+
+.alert-warning {
+    background-color: var(--bs-warning);
+    color: white;
+}
+
+.alert-severe {
+    background-color: var(--bs-danger);
+    color: white;
+}
+
+/* Scenario analysis */
+tr.highlight {
+    animation: highlight-row 2s;
+}
+
+@keyframes highlight-row {
+    0% { background-color: rgba(var(--bs-info-rgb), 0.2); }
+    100% { background-color: transparent; }
+}
+
+/* Charts */
+.chart-container {
+    position: relative;
+    height: 350px;
+    margin-bottom: 1.5rem;
+}
+
+/* Toast container */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
+}
+
+/* Override some Bootstrap styles for dark theme compatibility */
+.table {
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--bs-border-color);
+}
+
+/* Risk card headers */
+.risk-level {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05rem;
+    text-transform: uppercase;
+}
+
+.risk-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+/* Custom badge colors for market sentiment */
+.badge-risk-on {
+    background-color: var(--bs-success);
+}
+
+.badge-risk-off {
+    background-color: var(--bs-danger);
+}
+
+/* Historical data filters */
+.filter-group {
+    margin-bottom: 1rem;
+}
+
+/* Scenario analysis form */
+.scenario-controls .form-label {
+    font-weight: 500;
+}
+
+.scenario-results th {
+    position: sticky;
+    top: 0;
+    background-color: var(--bs-dark);
+    z-index: 10;
+}

@@ -1,101 +1,77 @@
 <!DOCTYPE html>
-<html lang="{{ current_language }}" data-bs-theme="dark">
+<html lang="zh" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Options Risk Monitoring System</title>
-    <!-- Bootstrap 5 CSS -->
+    <title>{{ title }} | 期权市场风险监控系统</title>
+    
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Font Awesome 图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
+    
     <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/css/custom.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    
+    <!-- 自定义CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="/">
-                    <i class="fas fa-chart-line me-2"></i>
-                    Options Risk Monitor
-                </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/' or request.path == '/dashboard' %}active{% endif %}" href="/dashboard">
-                                <i class="fas fa-tachometer-alt me-1"></i> {{ t('dashboard') }}
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/alerts' %}active{% endif %}" href="/alerts">
-                                <i class="fas fa-bell me-1"></i> {{ t('alerts') }}
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/historical' %}active{% endif %}" href="/historical">
-                                <i class="fas fa-history me-1"></i> {{ t('historical') }}
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/deviation_monitor' %}active{% endif %}" href="/deviation_monitor">
-                                <i class="fas fa-exclamation-triangle me-1"></i> {{ t('strike_deviation') }}
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/scenario' %}active{% endif %}" href="/scenario">
-                                <i class="fas fa-flask me-1"></i> {{ t('scenario') }}
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/settings' %}active{% endif %}" href="/settings">
-                                <i class="fas fa-cog me-1"></i> {{ t('settings') }}
-                            </a>
-                        </li>
-                    </ul>
-                    
-                    <!-- Language switcher -->
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="languageDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-globe me-1"></i> {{ t('language') }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
-                                {% for lang_code, lang_name in languages.items() %}
-                                <li>
-                                    <a class="dropdown-item {% if current_language == lang_code %}active{% endif %}" href="/language/{{ lang_code }}">
-                                        {{ lang_name }}
-                                    </a>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                        </li>
-                    </ul>
-                </div>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fas fa-chart-line me-2"></i>期权市场风险监控系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.path == url_for('dashboard') else '' }}" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-tachometer-alt me-1"></i> 仪表盘
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.path == url_for('historical') else '' }}" href="{{ url_for('historical') }}">
+                            <i class="fas fa-history me-1"></i> 历史数据
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.path == url_for('pcr_analysis') else '' }}" href="{{ url_for('pcr_analysis') }}">
+                            <i class="fas fa-balance-scale me-1"></i> 看跌/看涨比率
+                        </a>
+                    </li>
+                </ul>
             </div>
-        </nav>
-    </header>
-
-    <main class="container-fluid py-4">
+        </div>
+    </nav>
+    
+    <!-- 主要内容 -->
+    <div class="container-fluid mt-4">
+        <h1 class="mb-4">{{ title }}</h1>
         {% block content %}{% endblock %}
-    </main>
-
-    <footer class="footer mt-auto py-3 bg-dark">
+    </div>
+    
+    <!-- 页脚 -->
+    <footer class="footer mt-5 py-3 bg-dark text-light">
         <div class="container text-center">
-            <span class="text-muted">Options Market Risk Monitoring System &copy; 2023</span>
+            <span>期权市场风险监控系统 &copy; 2025</span>
         </div>
     </footer>
-
-    <!-- Toast container -->
-    <div id="toast-container"></div>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Chart.js plugins if needed -->
+    
+    <!-- Bootstrap Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- 自定义JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- 页面特定脚本 -->
     {% block scripts %}{% endblock %}
 </body>
 </html>

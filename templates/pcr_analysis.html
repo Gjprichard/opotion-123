@@ -1,0 +1,436 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="row">
+    <!-- 筛选器 -->
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">筛选器</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="symbol-select" class="form-label">资产</label>
+                        <select class="form-select" id="symbol-select">
+                            {% for symbol in symbols %}
+                            <option value="{{ symbol }}" {% if symbol == default_symbol %}selected{% endif %}>{{ symbol }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="exchange-select" class="form-label">交易所</label>
+                        <select class="form-select" id="exchange-select">
+                            <option value="">所有交易所</option>
+                            <option value="deribit">Deribit</option>
+                            <option value="okx">OKX</option>
+                            <option value="binance">Binance</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="days-select" class="form-label">数据天数</label>
+                        <select class="form-select" id="days-select">
+                            <option value="1">1天</option>
+                            <option value="3">3天</option>
+                            <option value="7" selected>7天</option>
+                            <option value="14">14天</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" class="btn btn-primary" id="refresh-btn">
+                            <i class="fas fa-sync-alt me-1"></i> 刷新数据
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 看跌/看涨比率概览 -->
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">看跌/看涨比率概览</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container" style="position: relative; height:300px;">
+                            <canvas id="pcr-breakdown-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100 bg-dark">
+                            <div class="card-header">
+                                <h5 class="card-title">数据分析</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <h6 class="text-muted">总看跌/看涨比率</h6>
+                                        <h3 id="total-pcr">--</h3>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <h6 class="text-muted">市场情绪</h6>
+                                        <h3 id="market-sentiment">--</h3>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <h6 class="text-muted">看涨期权成交量</h6>
+                                        <h4 id="call-volume">--</h4>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <h6 class="text-muted">看跌期权成交量</h6>
+                                        <h4 id="put-volume">--</h4>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <div class="alert alert-info" id="pcr-analysis">
+                                        正在加载分析...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 交易所比较 -->
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">交易所看跌/看涨比率比较</h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="position: relative; height:300px;">
+                    <canvas id="exchange-comparison-chart"></canvas>
+                </div>
+                <div class="mt-3">
+                    <div class="alert alert-secondary" id="exchange-analysis">
+                        <i class="fas fa-info-circle me-2"></i>
+                        通过比较不同交易所的看跌/看涨比率，可以发现市场情绪的微妙差异。普通零售交易者和专业机构可能对市场前景有不同看法。
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 全局图表对象
+    let charts = {
+        pcrBreakdownChart: null,
+        exchangeComparisonChart: null
+    };
+    
+    // 加载PCR数据
+    function loadPCRData() {
+        const symbol = $('#symbol-select').val();
+        const exchange = $('#exchange-select').val();
+        const days = $('#days-select').val();
+        
+        // 显示加载状态
+        $('#total-pcr, #market-sentiment, #call-volume, #put-volume').text('加载中...');
+        $('#pcr-analysis').html('<div class="spinner-border spinner-border-sm" role="status"></div> 正在加载分析...');
+        
+        // 请求数据
+        $.ajax({
+            url: `/api/pcr-data?symbol=${symbol}&exchange=${exchange}&days=${days}`,
+            method: 'GET',
+            success: function(response) {
+                updatePCRAnalysis(response);
+            },
+            error: function(xhr, status, error) {
+                console.error('获取PCR数据失败:', error);
+                alert('获取数据失败，请稍后重试。');
+            }
+        });
+    }
+    
+    // 更新PCR分析
+    function updatePCRAnalysis(data) {
+        // 更新基本数据
+        $('#total-pcr').text(formatNumber(data.put_call_ratio || 0));
+        $('#call-volume').text(formatNumber(data.call_volume || 0, 0));
+        $('#put-volume').text(formatNumber(data.put_volume || 0, 0));
+        
+        // 设置市场情绪样式
+        let sentimentText, sentimentClass;
+        const pcr = data.put_call_ratio || 0;
+        
+        if (pcr > 1.2) {
+            sentimentText = '偏空';
+            sentimentClass = 'text-danger';
+        } else if (pcr > 1.0) {
+            sentimentText = '略偏空';
+            sentimentClass = 'text-warning';
+        } else if (pcr >= 0.9 && pcr <= 1.1) {
+            sentimentText = '中性';
+            sentimentClass = 'text-info';
+        } else if (pcr >= 0.8) {
+            sentimentText = '略偏多';
+            sentimentClass = 'text-success';
+        } else {
+            sentimentText = '偏多';
+            sentimentClass = 'text-success';
+        }
+        
+        $('#market-sentiment').text(sentimentText).removeClass('text-success text-danger text-info text-warning').addClass(sentimentClass);
+        
+        // 更新PCR分析文本
+        let pcrAnalysis = '';
+        
+        if (pcr > 1.2) {
+            pcrAnalysis = `<i class="fas fa-arrow-down text-danger me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场偏空情绪较强，交易者更倾向于购买看跌期权寻求保护。这通常表明对价格下跌的担忧明显高于对上涨的预期。`;
+        } else if (pcr > 1.0) {
+            pcrAnalysis = `<i class="fas fa-arrow-down text-warning me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场略偏空，交易者对下行风险有所担忧，但没有出现恐慌情绪。`;
+        } else if (pcr >= 0.9 && pcr <= 1.1) {
+            pcrAnalysis = `<i class="fas fa-grip-lines text-info me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场情绪较为中性平衡。看涨和看跌期权的交易量相近，没有明显的方向性偏好。`;
+        } else if (pcr >= 0.8) {
+            pcrAnalysis = `<i class="fas fa-arrow-up text-success me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场略偏多，交易者更倾向于购买看涨期权，反映了对未来价格上涨的温和乐观。`;
+        } else {
+            pcrAnalysis = `<i class="fas fa-arrow-up text-success me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场偏多情绪较强，交易者积极购买看涨期权追求上涨收益。这种情况下，市场通常处于强烈的看涨状态。`;
+        }
+        
+        $('#pcr-analysis').html(pcrAnalysis);
+        
+        // 更新图表
+        updatePCRBreakdownChart(data);
+        updateExchangeComparisonChart(data);
+    }
+    
+    // 更新PCR占比图表
+    function updatePCRBreakdownChart(data) {
+        const ctx = document.getElementById('pcr-breakdown-chart').getContext('2d');
+        
+        // 如果图表已存在，销毁它
+        if (charts.pcrBreakdownChart) {
+            charts.pcrBreakdownChart.destroy();
+        }
+        
+        // 准备图表数据
+        const chartData = [
+            data.call_volume || 0,
+            data.put_volume || 0
+        ];
+        
+        // 创建图表
+        charts.pcrBreakdownChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['看涨期权成交量', '看跌期权成交量'],
+                datasets: [{
+                    data: chartData,
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(255, 99, 132, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.raw || 0;
+                                const total = chartData.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // 更新交易所比较图表
+    function updateExchangeComparisonChart(data) {
+        const ctx = document.getElementById('exchange-comparison-chart').getContext('2d');
+        
+        // 如果图表已存在，销毁它
+        if (charts.exchangeComparisonChart) {
+            charts.exchangeComparisonChart.destroy();
+        }
+        
+        // 准备图表数据
+        const exchangeData = data.exchange_data || {};
+        const exchanges = Object.keys(exchangeData);
+        
+        if (exchanges.length === 0) {
+            // 没有交易所数据
+            $('#exchange-comparison-chart').hide();
+            $('#exchange-analysis').text('没有可用的交易所数据进行比较。');
+            return;
+        }
+        
+        const callVolumes = [];
+        const putVolumes = [];
+        const pcrValues = [];
+        
+        for (const exchange of exchanges) {
+            const exchangeInfo = exchangeData[exchange] || {};
+            callVolumes.push(exchangeInfo.call_volume || 0);
+            putVolumes.push(exchangeInfo.put_volume || 0);
+            pcrValues.push(exchangeInfo.ratio || 0);
+        }
+        
+        // 创建图表
+        charts.exchangeComparisonChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: exchanges.map(e => e.charAt(0).toUpperCase() + e.slice(1)),
+                datasets: [
+                    {
+                        label: '看涨期权成交量',
+                        data: callVolumes,
+                        backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: '看跌期权成交量',
+                        data: putVolumes,
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: '看跌/看涨比率',
+                        data: pcrValues,
+                        backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 2,
+                        type: 'line',
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: '交易所'
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: '成交量'
+                        },
+                        beginAtZero: true
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: '看跌/看涨比率'
+                        },
+                        beginAtZero: true,
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
+        
+        // 更新交易所分析文本
+        let analysisText = '<i class="fas fa-chart-bar me-2"></i> ';
+        
+        // 检查交易所之间是否存在显著差异
+        const maxPCR = Math.max(...pcrValues);
+        const minPCR = Math.min(...pcrValues);
+        const diffPercent = ((maxPCR - minPCR) / ((maxPCR + minPCR) / 2)) * 100;
+        
+        if (diffPercent > 20) {
+            const maxIndex = pcrValues.indexOf(maxPCR);
+            const minIndex = pcrValues.indexOf(minPCR);
+            const maxExchange = exchanges[maxIndex].charAt(0).toUpperCase() + exchanges[maxIndex].slice(1);
+            const minExchange = exchanges[minIndex].charAt(0).toUpperCase() + exchanges[minIndex].slice(1);
+            
+            analysisText += `交易所间存在<strong>显著差异</strong>: ${maxExchange} 的PCR为 ${formatNumber(maxPCR)}，而 ${minExchange} 的PCR为 ${formatNumber(minPCR)}。这表明不同交易所的交易者对市场前景看法不一致，可能反映出不同类型交易者的行为差异。`;
+        } else {
+            analysisText += `各交易所的看跌/看涨比率较为一致，表明市场参与者对当前市场情绪有较高共识。`;
+        }
+        
+        $('#exchange-analysis').html(analysisText);
+        $('#exchange-comparison-chart').show();
+    }
+    
+    // 格式化数字
+    function formatNumber(value, decimals = 2) {
+        if (value === null || value === undefined) return '--';
+        return parseFloat(value).toFixed(decimals);
+    }
+    
+    // 刷新数据
+    function refreshData() {
+        const symbol = $('#symbol-select').val();
+        
+        $.ajax({
+            url: `/refresh-data?symbol=${symbol}`,
+            method: 'GET',
+            beforeSend: function() {
+                $('#refresh-btn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 刷新中...');
+            },
+            success: function(response) {
+                if (response.success) {
+                    // 加载最新数据
+                    loadPCRData();
+                    alert('数据已刷新！');
+                } else {
+                    alert('刷新数据失败: ' + response.error);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('刷新数据失败:', error);
+                alert('刷新数据失败，请稍后重试。');
+            },
+            complete: function() {
+                $('#refresh-btn').prop('disabled', false).html('<i class="fas fa-sync-alt me-1"></i> 刷新数据');
+            }
+        });
+    }
+    
+    // 页面加载时初始化
+    $(document).ready(function() {
+        // 绑定筛选器变更事件
+        $('#symbol-select, #exchange-select, #days-select').change(function() {
+            loadPCRData();
+        });
+        
+        // 绑定刷新按钮事件
+        $('#refresh-btn').click(function() {
+            refreshData();
+        });
+        
+        // 加载初始数据
+        loadPCRData();
+    });
+</script>
+{% endblock %}

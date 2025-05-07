@@ -1,46 +1,50 @@
 import os
-import logging
-
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
-from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_apscheduler import APScheduler
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
+# 创建基础类
 class Base(DeclarativeBase):
     pass
 
+# 初始化数据库
 db = SQLAlchemy(model_class=Base)
 
-# Create the app
-app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "options_risk_monitoring_system")
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)  # needed for url_for to generate with https
+# 初始化调度器
+scheduler = APScheduler()
 
-# Configure the database from environment variables
+# 创建应用
+app = Flask(__name__)
+app.secret_key = os.environ.get("SESSION_SECRET", "crypto_options_secret")
+
+# 配置数据库
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
 }
 
-# Initialize the app with the extension
+# 配置调度器
+app.config["SCHEDULER_API_ENABLED"] = True
+
+# 初始化扩展
 db.init_app(app)
+scheduler.init_app(app)
 
 with app.app_context():
-    # Import models to create tables
-    import models  # noqa: F401
+    # 导入模型
+    from models import OptionData, RiskIndicator
     
-    try:
-        db.create_all()
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Error creating database tables: {str(e)}")
-
-    # Initialize the scheduler service
-    from services.scheduler import init_scheduler
-    init_scheduler(app)
+    # 创建数据库表
+    db.create_all()
+    
+    # 导入路由
+    import routes
+    
+    # 导入服务
+    from services.scheduler_service import configure_scheduler
+    
+    # 配置并启动调度器
+    configure_scheduler(scheduler)
+    scheduler.start()
