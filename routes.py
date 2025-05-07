@@ -22,11 +22,21 @@ def index():
 @app.route('/health')
 def health_check():
     """简单的健康检查端点，确认API是否正常工作"""
-    return jsonify({
-        'status': 'ok',
-        'timestamp': datetime.utcnow().isoformat(),
-        'message': '服务正常运行中'
-    })
+    try:
+        # 确保数据库连接正常
+        db_ok = db.session.execute("SELECT 1").scalar() == 1
+        return jsonify({
+            'status': 'ok',
+            'timestamp': datetime.utcnow().isoformat(),
+            'message': '服务正常运行中',
+            'database': 'connected' if db_ok else 'error',
+            'environment': os.environ.get('REPL_SLUG', 'unknown')
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/dashboard')
 def dashboard():

@@ -1,3 +1,4 @@
+import os
 from app import app, db
 from services.data_service import DataService
 from services.risk_service import RiskService
@@ -54,4 +55,5 @@ with app.app_context():
 
 if __name__ == "__main__":
     # Make sure to run the server so it's accessible externally
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True, use_reloader=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

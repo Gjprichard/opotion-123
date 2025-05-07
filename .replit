@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
 
 [workflows]
-runButton = "重启应用"
+runButton = "启动应用"
 
 [[workflows.workflow]]
 name = "Project"
@@ -45,6 +45,27 @@ args = "sleep 1"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
+
+[[workflows.workflow]]
+name = "启动应用"
+author = 39412638
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f gunicorn || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f python || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "kill $(lsof -t -i:5000) 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "gunicorn --bind 0.0.0.0:5000 --workers=2 --timeout=90 main:app"
 
 [[ports]]
 localPort = 5000
