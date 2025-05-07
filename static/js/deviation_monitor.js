@@ -9,6 +9,9 @@ if (!window.chartObjects) {
     window.chartObjects = {};
 }
 
+// 全局变量
+let autoRefreshInterval = null;
+
 /**
  * ==========================================
  * 数据工具模块 - 用于数据处理和格式化
