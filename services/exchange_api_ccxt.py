@@ -42,7 +42,7 @@ def initialize_exchange(exchange_id='deribit', api_key=None, api_secret=None, te
             'apiKey': api_key,
             'secret': api_secret,
             'enableRateLimit': True,  # 启用速率限制
-            'timeout': 30000,  # 增加超时时间
+            'timeout': 15000,  # 设置更短的超时时间
             'options': {}
         }
         
@@ -341,10 +341,10 @@ def _get_deribit_options(symbol, current_price, strike_min, strike_max, exchange
         for _, group in groupby(filtered_options, key=lambda x: x['expiry']):
             grouped_options.append(list(group))
         
-        # 处理每组期权
+        # 处理每组期权 - 减少处理数量以提高性能
         for group in grouped_options:
-            # (注：取前20个是为了减少处理数量，实际生产中可能需要处理所有)
-            for i in range(0, min(len(group), 20), batch_size):
+            # 降低处理数量到5个，以防止请求卡住
+            for i in range(0, min(len(group), 5), batch_size):
                 batch = group[i:i+batch_size]
                 for option in batch:
                     try:

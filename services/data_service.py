@@ -14,32 +14,32 @@ def fetch_latest_option_data(symbol):
     """
     Fetch the latest option data for a given symbol from multiple exchanges
     and store in the database.
-    
+
     支持从Deribit, Binance, OKX获取期权数据
     """
     try:
         logger.info(f"Fetching latest option data for {symbol} from supported exchanges")
-        
+
         # 导入所需的模块
         from app import db
         from models import ApiCredential
-        
+
         # 使用所有支持的交易所：Deribit, Binance, OKX
         enabled_exchanges = ['deribit', 'binance', 'okx']
         logger.info(f"Using real data from all supported exchanges for {symbol}")
-            
+
         logger.info(f"Fetching {symbol} option data from exchanges: {', '.join(enabled_exchanges)}")
-        
+
         # 从CCXT集成的API获取当前的期权市场数据
         from services.exchange_api_ccxt import set_api_credentials, get_option_market_data
-        
+
         # 设置各交易所的API凭证
         for exchange_id in enabled_exchanges:
             api_credential = ApiCredential.query.filter_by(
                 api_name=exchange_id, 
                 is_active=True
             ).first()
-            
+
             if api_credential:
                 set_api_credentials(
                     api_key=api_credential.api_key, 
@@ -47,27 +47,47 @@ def fetch_latest_option_data(symbol):
                     exchange_id=exchange_id
                 )
                 logger.info(f"Set API credentials for {exchange_id}")
-        
+
         # 获取所有启用交易所的数据
         all_option_data = []
         for exchange_id in enabled_exchanges:
             try:
-                exchange_data = get_option_market_data(symbol, exchange_id)
-                if exchange_data:
-                    logger.info(f"Received {len(exchange_data)} option contracts for {symbol} from {exchange_id}")
-                    all_option_data.extend(exchange_data)
+                import threading
+                import time
+                timeout = 30 #default timeout
+                result = []
+
+                def fetch_data():
+                    nonlocal result
+                    try:
+                        data = get_option_market_data(symbol, exchange_id)
+                        result.extend(data)
+                    except Exception as e:
+                        logger.error(f"获取{exchange_id}数据时出错: {str(e)}")
+
+                thread = threading.Thread(target=fetch_data)
+                thread.daemon = True
+                thread.start()
+                thread.join(timeout)
+
+                if thread.is_alive():
+                    logger.warning(f"获取{exchange_id}数据超时（{timeout}秒），跳过")
                 else:
-                    logger.warning(f"No option data received from {exchange_id} for {symbol}")
+                    if result:
+                        logger.info(f"Received {len(result)} option contracts for {symbol} from {exchange_id}")
+                        all_option_data.extend(result)
+                    else:
+                        logger.warning(f"No option data received from {exchange_id} for {symbol}")
             except Exception as e:
                 logger.error(f"Error fetching {symbol} data from {exchange_id}: {str(e)}")
-        
+
         # 如果没有数据，返回错误
         if not all_option_data:
             logger.error(f"No option data received from any exchange for {symbol}")
             return False
-        
+
         logger.info(f"Total {len(all_option_data)} option contracts received for {symbol} from all exchanges")
-        
+
         # 将API数据转换为OptionData模型对象
         new_records = []
         for data in all_option_data:
@@ -76,11 +96,11 @@ def fetch_latest_option_data(symbol):
                 expiration_date = datetime.fromtimestamp(data["expiration_date"] / 1000).date()
             else:
                 expiration_date = data["expiration_date"]
-            
+
             # 处理可能的None值
             if expiration_date is None:
                 continue  # 跳过没有到期日的记录
-                
+
             # 安全转换为OptionData对象，处理可能的空值
             try:
                 # 提供默认值0或None处理可能的无效值
@@ -106,16 +126,16 @@ def fetch_latest_option_data(symbol):
             except (ValueError, TypeError) as e:
                 logger.error(f"处理期权数据时出错: {e}，数据: {data}")
                 # 跳过无效数据但不中断整个处理
-        
+
         # 保存到数据库
         db.session.bulk_save_objects(new_records)
         db.session.commit()
-        
+
         # 清理旧数据
         cleanup_old_data()
-        
+
         return True
-        
+
     except Exception as e:
         logger.error(f"Error fetching option data from API: {str(e)}")
         db.session.rollback()
@@ -128,14 +148,14 @@ def fetch_historical_data(symbol, days=30):
     """
     try:
         from_date = datetime.utcnow() - timedelta(days=days)
-        
+
         historical_data = OptionData.query.filter(
             OptionData.symbol == symbol,
             OptionData.timestamp > from_date
         ).order_by(OptionData.timestamp).all()
-        
+
         return historical_data
-    
+
     except Exception as e:
         logger.error(f"Error fetching historical data: {str(e)}")
         return []
@@ -144,15 +164,15 @@ def cleanup_old_data():
     """Remove data older than the retention period"""
     try:
         cutoff_date = datetime.utcnow() - timedelta(days=Config.DATA_RETENTION_DAYS)
-        
+
         # Delete old option data
         deleted_count = OptionData.query.filter(
             OptionData.timestamp < cutoff_date
         ).delete()
-        
+
         db.session.commit()
         logger.info(f"Cleaned up {deleted_count} old option data records")
-        
+
     except Exception as e:
         logger.error(f"Error cleaning up old data: {str(e)}")
         db.session.rollback()
@@ -166,7 +186,7 @@ def get_base_price_for_symbol(symbol):
             return price
     except Exception as e:
         logger.error(f"获取{symbol}基准价格时出错: {str(e)}")
-    
+
     # 如果无法获取真实价格，返回默认值
     prices = {
         'BTC': 92500.0,  # Bitcoin price in USD
