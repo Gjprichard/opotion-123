@@ -10,8 +10,7 @@ data_service = DataService()
 risk_service = RiskService()
 deviation_service = DeviationMonitorService()
 
-# Import routes after service initialization to avoid circular imports
-import routes  # noqa: F401
+# Import routes later in the file to avoid circular imports
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +49,10 @@ with app.app_context():
         initialize_database()
     else:
         logger.info(f"Database already contains {count} option data records")
+    
+    # Import routes after database initialization to avoid circular imports
+    import routes  # noqa: F401
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # Make sure to run the server so it's accessible externally
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)

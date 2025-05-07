@@ -5,7 +5,12 @@ from sqlalchemy import func
 from app import app, db
 from models import OptionData, RiskIndicator, Alert, AlertThreshold, ScenarioAnalysis, StrikeDeviationMonitor, DeviationAlert, ApiCredential, SystemSetting
 from config import Config
-from main import data_service, risk_service, deviation_service
+
+# Get service instances from main to avoid circular imports
+import main
+data_service = main.data_service
+risk_service = main.risk_service
+deviation_service = main.deviation_service
 from services.alert_service import get_active_alerts, acknowledge_alert, update_alert_threshold
 from services.exchange_api_ccxt import set_api_credentials, get_underlying_price, test_connection
 from translations import translations

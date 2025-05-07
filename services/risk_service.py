@@ -10,7 +10,7 @@ from app import db
 from models import OptionData, RiskIndicator, ScenarioAnalysis
 from services.alert_service import check_alert_thresholds
 from config import Config
-from services.exchange_api import get_underlying_price
+from services.exchange_api_ccxt import get_underlying_price
 
 logger = logging.getLogger(__name__)
 

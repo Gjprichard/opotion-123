@@ -1,7 +1,7 @@
 import os
 import logging
 
-from flask import Flask
+from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -30,6 +30,15 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 # Initialize the app with the extension
 db.init_app(app)
+
+# 添加错误处理器
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    return render_template('500.html'), 500
 
 with app.app_context():
     # Import models to create tables
