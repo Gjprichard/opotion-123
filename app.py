@@ -4,6 +4,7 @@ from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_cors import CORS
 
 # 导入日志配置
 from utils.logging_config import configure_logging, get_logger
@@ -21,6 +22,7 @@ db = SQLAlchemy(model_class=Base)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "options_risk_monitoring_system")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)  # needed for url_for to generate with https
+CORS(app)  # 启用CORS，允许跨域请求
 
 # Configure the database from environment variables
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
