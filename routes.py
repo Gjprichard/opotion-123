@@ -666,7 +666,7 @@ def deviation_volume_analysis_api():
         return jsonify(create_default_volume_data())
 
 def create_default_volume_data():
-    """创建默认的多空成交量分析数据结构"""
+    """创建默认的多空成交量分析数据结构 - 只在API获取数据失败时使用"""
     return {
         'call_put_ratio': 1.0,
         'volume_stats': {
@@ -707,7 +707,7 @@ def create_default_volume_data():
             'call_anomalies': 0,
             'put_anomalies': 0,
             'alert_level': 'normal',
-            'alert_trigger': '无'
+            'alert_trigger': '数据获取失败'
         },
         'history': [
             {
@@ -734,7 +734,6 @@ def save_api_settings():
     try:
         api_key = request.json.get('api_key', '')
         api_secret = request.json.get('api_secret', '')
-        use_real_data = request.json.get('use_real_data', False)
         
         # 保存Deribit API凭证
         if api_key and api_secret:
@@ -758,19 +757,6 @@ def save_api_settings():
             
             # 将凭证应用到API客户端
             set_api_credentials(api_key, api_secret)
-        
-        # 保存是否使用实时数据设置
-        use_real_data_setting = SystemSetting.query.filter_by(setting_name='use_real_data').first()
-        if use_real_data_setting:
-            use_real_data_setting.setting_value = 'true' if use_real_data else 'false'
-        else:
-            use_real_data_setting = SystemSetting(
-                setting_name='use_real_data',
-                setting_value='true' if use_real_data else 'false',
-                setting_type='boolean',
-                description='Whether to use real market data from API instead of simulation'
-            )
-            db.session.add(use_real_data_setting)
         
         db.session.commit()
         
