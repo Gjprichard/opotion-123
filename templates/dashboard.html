@@ -2,266 +2,260 @@
 
 {% block content %}
 <div class="row mb-4">
-    <div class="col-md-8">
-        <h2>期权风险仪表盘</h2>
-        <p class="text-muted">实时监控加密货币期权市场风险指标和多空情绪</p>
+    <div class="col-md-6">
+        <h1 class="h3 mb-0 text-gray-800">{{ t('dashboard') }}</h1>
+        <p class="text-muted">Real-time market risk indicators based on financial reflexivity theory</p>
     </div>
-    <div class="col-md-4">
-        <div class="d-flex justify-content-end align-items-center h-100">
-            <div class="me-2">
-                <select id="symbol-selector" class="form-select form-select-sm">
-                    {% for symbol in symbols %}
-                    <option value="{{ symbol }}" {% if symbol == default_symbol %}selected{% endif %}>{{ symbol }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
+    <div class="col-md-6 text-end">
+        <div class="d-flex justify-content-end">
+            <div class="me-3">
+                <label for="time-period-selector" class="form-label">{{ t('time_period') }}</label>
                 <select id="time-period-selector" class="form-select form-select-sm">
-                    {% for period in time_periods %}
-                    <option value="{{ period }}" {% if period == default_time_period %}selected{% endif %}>
-                        {% if period == '15m' %}15分钟
-                        {% elif period == '1h' %}1小时
-                        {% elif period == '4h' %}4小时
-                        {% elif period == '1d' %}1天
-                        {% elif period == '7d' %}7天
-                        {% elif period == '30d' %}30天
-                        {% else %}{{ period }}
-                        {% endif %}
+                    {% for period_key, period_info in time_periods.items() %}
+                    <option value="{{ period_key }}" {% if period_key == current_time_period %}selected{% endif %}>
+                        {{ period_info.label }}
                     </option>
                     {% endfor %}
                 </select>
             </div>
-            <button id="refresh-btn" class="btn btn-sm btn-outline-primary ms-2">
-                <i class="fas fa-sync-alt"></i>
-            </button>
+            <div class="me-3">
+                <label for="symbol-selector" class="form-label">{{ t('symbol') }}</label>
+                <select id="symbol-selector" class="form-select form-select-sm">
+                    {% for symbol in symbols %}
+                    <option value="{{ symbol }}">{{ t(symbol.lower()) if symbol.lower() in ['btc', 'eth'] else symbol }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">&nbsp;</label>
+                <button id="refresh-data" class="btn btn-primary d-block">
+                    <i class="fas fa-sync-alt"></i> {{ t('refresh') }}
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
-<div id="dashboard-container">
-    <!-- 概览卡片 -->
-    <div class="row mb-4">
-        <!-- 市场概览 -->
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-chart-line me-2"></i>市场概览
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between mb-3">
-                        <div>
-                            <span class="d-block text-muted small">当前价格</span>
-                            <h3 id="current-price">--</h3>
-                        </div>
-                        <div class="text-end">
-                            <span class="d-block text-muted small">24小时变化</span>
-                            <h5 id="price-change">--</h5>
+<!-- Risk Summary Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2 risk-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="risk-level text-primary">{{ t('volaxivity') }}</div>
+                        <div class="risk-value mb-1" id="volaxivity-value">--</div>
+                        <div class="progress">
+                            <div id="volaxivity-indicator" class="progress-bar risk-indicator" role="progressbar" style="width: 0%"></div>
                         </div>
                     </div>
-                    
-                    <div class="d-flex justify-content-between mb-3">
-                        <div>
-                            <span class="d-block text-muted small">市场情绪</span>
-                            <h5 id="market-sentiment">--</h5>
-                        </div>
-                        <div class="text-end">
-                            <span class="d-block text-muted small">看跌/看涨比率</span>
-                            <h5 id="pcr-value">--</h5>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-2">
-                        <span class="d-block text-muted small">总成交量</span>
-                        <h5 id="total-volume">--</h5>
-                    </div>
-                    
-                    <div class="text-muted small mt-3">
-                        最后更新时间: <span id="last-updated">--</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 风险指标 -->
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-exclamation-triangle me-2"></i>风险指标
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted small">波动率指数</span>
-                            <span id="volatility-index">--</span>
-                        </div>
-                        <div class="progress" role="progressbar" style="height: 5px;">
-                            <div class="progress-bar bg-primary" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted small">波动率偏斜</span>
-                            <span id="volatility-skew">--</span>
-                        </div>
-                        <div class="progress" role="progressbar" style="height: 5px;">
-                            <div class="progress-bar bg-info" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted small">反身性指标</span>
-                            <span id="reflexivity-indicator">--</span>
-                        </div>
-                        <div class="progress" role="progressbar" style="height: 5px;">
-                            <div class="progress-bar bg-warning" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted small">整体风险等级</span>
-                            <span id="risk-level" class="text-warning">--</span>
-                        </div>
-                        <div class="progress" role="progressbar" style="height: 5px;">
-                            <div class="progress-bar bg-danger" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="text-muted small mt-3">
-                        <i class="fas fa-info-circle me-1"></i>
-                        基于金融反身性理论的风险评估
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 交易所比较 -->
-        <div class="col-lg-6 col-md-12 mb-3">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-exchange-alt me-2"></i>交易所比较
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div id="exchange-comparison-container" style="height: 180px;">
-                                <canvas id="exchange-comparison-chart"></canvas>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div id="volume-distribution-container" style="height: 180px;">
-                                <canvas id="volume-distribution-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="table-responsive mt-2">
-                        <table class="table table-sm table-hover">
-                            <thead>
-                                <tr>
-                                    <th>交易所</th>
-                                    <th>看涨成交量</th>
-                                    <th>看跌成交量</th>
-                                    <th>PCR</th>
-                                </tr>
-                            </thead>
-                            <tbody id="exchange-detail-table-body">
-                                <!-- 数据将通过JS填充 -->
-                            </tbody>
-                        </table>
+                    <div class="col-auto">
+                        <i class="fas fa-chart-area fa-2x text-gray-300"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- 图表区域 -->
-    <div class="row">
-        <!-- 波动率趋势 -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-chart-area me-2"></i>波动率趋势
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div id="volatility-chart-container" style="height: 300px;">
-                        <canvas id="volatility-chart"></canvas>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2 risk-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="risk-level text-success">{{ t('volatility_skew') }}</div>
+                        <div class="risk-value mb-1" id="volatility-skew-value">--</div>
+                        <div class="progress">
+                            <div id="skew-indicator" class="progress-bar risk-indicator" role="progressbar" style="width: 0%"></div>
+                        </div>
                     </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 看跌/看涨比率趋势 -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-balance-scale me-2"></i>看跌/看涨比率趋势
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div id="pcr-chart-container" style="height: 300px;">
-                        <canvas id="pcr-chart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 希腊字母敞口 -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-project-diagram me-2"></i>反身性强度趋势
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div id="greeks-chart-container" style="height: 300px;">
-                        <canvas id="greeks-chart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 风险等级趋势 -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-exclamation-circle me-2"></i>风险等级趋势
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div id="risk-chart-container" style="height: 300px;">
-                        <canvas id="risk-chart"></canvas>
+                    <div class="col-auto">
+                        <i class="fas fa-balance-scale fa-2x text-gray-300"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- 最新警报 -->
-    <div class="row">
-        <div class="col-12 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-bell me-2"></i>最新警报
-                    </h5>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2 risk-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="risk-level text-info">{{ t('put_call_ratio') }}</div>
+                        <div class="risk-value mb-1" id="put-call-ratio-value">--</div>
+                        <div class="progress">
+                            <div id="pcr-indicator" class="progress-bar risk-indicator" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-exchange-alt fa-2x text-gray-300"></i>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div id="latest-alerts">
-                        <div class="alert alert-info">目前没有警报</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2 risk-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="risk-level text-warning">{{ t('reflexivity_indicator') }}</div>
+                        <div class="risk-value mb-1" id="reflexivity-value">--</div>
+                        <div class="progress">
+                            <div id="reflexivity-indicator" class="progress-bar risk-indicator" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-sync fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Market Sentiment -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold">{{ t('market_sentiment') }}</h6>
+                <div class="time-period-selector btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-primary active" data-days="30">30天</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center mb-4">
+                        <h5>{{ t('market_sentiment') }}</h5>
+                        <div class="display-6 font-weight-bold" id="market-sentiment">--</div>
+                        <p class="text-muted mt-2">Based on combined risk indicators</p>
+                        <!-- Hidden elements containing translations for JavaScript -->
+                        <span class="d-none" data-sentiment="risk-on">{{ t('risk-on') }}</span>
+                        <span class="d-none" data-sentiment="risk-off">{{ t('risk-off') }}</span>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="chart-container" id="risk-chart-container">
+                            <canvas id="risk-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reflexivity Indicator -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold">{{ t('reflexivity_indicator') }}</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" id="reflexivity-chart-container">
+                    <canvas id="reflexivity-chart"></canvas>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i> <strong>{{ t('reflexivity_indicator') }}:</strong> 
+                            This indicator measures the intensity of market feedback loops where traders' actions influence market prices, which in turn affect future trading decisions.
+                            Higher values indicate stronger feedback effects, potentially leading to market instability.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Alerts and Data Summary -->
+<div class="row">
+    <!-- Active Alerts -->
+    <div class="col-md-8 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold">{{ t('alerts') }}</h6>
+            </div>
+            <div class="card-body" id="active-alerts">
+                {% if alerts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Symbol</th>
+                                <th>Type</th>
+                                <th>Indicator</th>
+                                <th>Message</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in alerts %}
+                            <tr class="alert-item" data-alert-id="{{ alert.id }}">
+                                <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ t(alert.symbol.lower()) if alert.symbol.lower() in ['btc', 'eth'] else alert.symbol }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'info' if alert.alert_type == 'attention' else ('warning' if alert.alert_type == 'warning' else 'danger') }}">
+                                        {{ t(alert.alert_type) }}
+                                    </span>
+                                </td>
+                                <td>{{ t(alert.indicator) }}</td>
+                                <td>{{ alert.message }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary acknowledge-alert" data-alert-id="{{ alert.id }}">
+                                        <i class="fas fa-check"></i> {{ t('acknowledge') }}
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-check-circle fa-3x mb-3"></i>
+                    <p class="lead">No active alerts at the moment</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Summary -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold">Data Summary</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <h5>Latest Data</h5>
+                    <p>
+                        {% if latest_data_time %}
+                        Last updated: {{ latest_data_time.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                        No data available
+                        {% endif %}
+                    </p>
+                </div>
+                
+                <div class="mb-4">
+                    <h5>Options Data</h5>
+                    <p>Options in database: {{ options_count or 0 }}</p>
+                </div>
+                
+                <div class="mb-4">
+                    <h5>Tracked Symbols</h5>
+                    <div class="d-flex flex-wrap">
+                        {% for symbol in symbols %}
+                        <span class="badge bg-secondary me-2 mb-2 p-2">
+                            {{ t(symbol.lower()) if symbol.lower() in ['btc', 'eth'] else symbol }}
+                        </span>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -271,5 +265,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/dashboard.js"></script>
 {% endblock %}

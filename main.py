@@ -1,31 +1,48 @@
-import logging
-import requests
 from app import app, db
-import routes  # 导入路由
+import routes  # noqa: F401
+from services.data_service import fetch_latest_option_data
+from services.risk_calculator import calculate_risk_indicators
+from services.deviation_monitor_service import calculate_deviation_metrics
+from config import Config
+import logging
 
-# 配置日志
-logging.basicConfig(level=logging.INFO, 
-                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# 应用初始化
-with app.app_context():
-    # 导入模型
-    from models import OptionData, RiskIndicator
-    
-    # 创建数据库表
-    db.create_all()
-    
-    # 初始化日志
-    logging.info("应用程序初始化...")
-    
-    # 检查交易所API连接
+def initialize_database():
+    """
+    Initialize the database with real data for each tracked symbol
+    """
     try:
-        from services.exchange_api import ExchangeAPI
-        api = ExchangeAPI()
-        exchanges = list(api.exchanges.keys())
-        logging.info(f"已连接的交易所: {', '.join(exchanges)}")
+        # Initialize data for each tracked symbol
+        for symbol in Config.TRACKED_SYMBOLS:
+            logger.info(f"Initializing data for {symbol} from real exchange APIs...")
+            
+            # Fetch latest option data for the symbol
+            success = fetch_latest_option_data(symbol)
+            
+            if success:
+                # Calculate risk indicators based on the new data
+                calculate_risk_indicators(symbol)
+                # 计算期权执行价偏离指标
+                calculate_deviation_metrics(symbol)
+                logger.info(f"Successfully initialized data for {symbol}")
+            else:
+                logger.error(f"Failed to initialize data for {symbol} - please check API connections")
     except Exception as e:
-        logging.error(f"交易所API初始化失败: {str(e)}")
+        logger.error(f"Error initializing database: {str(e)}")
+
+# Initialize the database with data when the app starts
+with app.app_context():
+    # Check if data already exists
+    from models import OptionData
+    count = OptionData.query.count()
+    if count == 0:
+        logger.info("No data found in database. Initializing...")
+        initialize_database()
+    else:
+        logger.info(f"Database already contains {count} option data records")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)

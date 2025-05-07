@@ -1,410 +1,206 @@
-import ccxt
+"""
+Deribit交易所API连接模块
+用于获取BTC和ETH的期权市场数据
+"""
 import logging
-import os
+import json
+import time
+import hmac
+import hashlib
+import requests
+import websocket
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from urllib.parse import urlencode
 
-# 导入模拟数据模块
-from services.mock_data import get_mock_price, get_mock_ohlcv, get_mock_ticker
-
-# 获取环境设置
-USE_MOCK_DATA = os.environ.get('USE_MOCK_DATA', 'false').lower() == 'true'
-
-# 配置日志
 logger = logging.getLogger(__name__)
 
-# 交易所符号映射
-EXCHANGE_SYMBOLS = {
-    'deribit': {
-        'BTC': 'BTC-PERPETUAL',
-        'ETH': 'ETH-PERPETUAL',
-    },
-    'okx': {
-        'BTC': 'BTC/USDT:USDT',  # 现货交易对
-        'ETH': 'ETH/USDT:USDT',
-    },
-    'binance': {
-        'BTC': 'BTC/USDT',
-        'ETH': 'ETH/USDT',
-    }
-}
+# Deribit API URLs
+BASE_URL = "https://www.deribit.com"
+WS_URL = "wss://www.deribit.com/ws/api/v2"
 
-class ExchangeAPI:
-    """加密货币交易所API接口类"""
+# API配置
+API_KEY = None
+API_SECRET = None
+
+def set_api_credentials(api_key, api_secret):
+    """设置API凭证"""
+    global API_KEY, API_SECRET
+    API_KEY = api_key
+    API_SECRET = api_secret
+    logger.info("API credentials have been set")
+
+def get_auth_headers(api_key, api_secret):
+    """生成认证头信息"""
+    timestamp = int(time.time() * 1000)
+    nonce = str(timestamp)
     
-    def __init__(self):
-        """初始化所有支持的交易所"""
-        self.exchanges = {}
-        self.init_exchanges()
+    signature_data = {
+        "timestamp": timestamp,
+        "nonce": nonce,
+    }
     
-    def init_exchanges(self):
-        """初始化所有支持的交易所"""
-        try:
-            # 初始化Deribit
-            self.exchanges['deribit'] = ccxt.deribit({
-                'enableRateLimit': True,
-                'timeout': 30000,  # 增加超时时间
-                'options': {
-                    'adjustForTimeDifference': True,
-                    'recvWindow': 10000,
-                }
-            })
-            logger.info("Deribit交易所初始化成功")
-            
-            # 初始化OKX
-            self.exchanges['okx'] = ccxt.okx({
-                'enableRateLimit': True,
-                'timeout': 30000,
-                'options': {
-                    'adjustForTimeDifference': True,
-                    'recvWindow': 10000,
-                }
-            })
-            logger.info("OKX交易所初始化成功")
-            
-            # 初始化Binance
-            self.exchanges['binance'] = ccxt.binance({
-                'enableRateLimit': True,
-                'timeout': 30000,
-                'options': {
-                    'adjustForTimeDifference': True,
-                    'recvWindow': 10000,
-                }
-            })
-            logger.info("Binance交易所初始化成功")
-            
-        except Exception as e:
-            logger.error(f"初始化交易所时出错: {str(e)}")
+    signature_data_str = json.dumps(signature_data)
+    signature = hmac.new(
+        bytes(api_secret, "utf-8"),
+        bytes(signature_data_str, "utf-8"),
+        hashlib.sha256
+    ).hexdigest()
     
-    def get_option_markets(self, exchange_id: str, symbol: str) -> List[Dict[str, Any]]:
-        """获取特定交易所的期权市场数据"""
-        try:
-            if exchange_id not in self.exchanges:
-                logger.warning(f"不支持的交易所: {exchange_id}")
-                return []
-            
-            exchange = self.exchanges[exchange_id]
-            formatted_symbol = self._format_symbol(exchange_id, symbol)
-            
-            # 获取所有期权市场
-            markets = exchange.load_markets()
-            
-            # 筛选出指定资产的期权市场
-            option_markets = []
-            
-            for market_id, market in markets.items():
-                # 检查是否为期权合约且为指定资产
-                if market['type'] == 'option' and market['base'] == formatted_symbol:
-                    option_markets.append(market)
-            
-            logger.info(f"从 {exchange_id} 获取到 {len(option_markets)} 个 {symbol} 期权合约")
-            
-            return option_markets
-            
-        except Exception as e:
-            logger.error(f"获取 {exchange_id} 的期权市场数据时出错: {str(e)}")
-            return []
-    
-    def get_option_data(self, exchange_id: str, symbol: str, expiry_days_range: int = 7) -> List[Dict[str, Any]]:
-        """获取期权数据，只包含特定到期日范围内的合约"""
-        try:
-            # 获取市场数据
-            markets = self.get_option_markets(exchange_id, symbol)
-            
-            if not markets:
-                return []
-            
-            # 获取标的资产价格
-            underlying_price = self.get_underlying_price(exchange_id, symbol)
-            
-            if not underlying_price:
-                logger.error(f"无法获取 {symbol} 在 {exchange_id} 的标的价格")
-                return []
-            
-            logger.info(f"{exchange_id} 的 {symbol} 当前价格: {underlying_price}")
-            
-            # 计算执行价格范围 (当前价格的 ±10%)
-            strike_min = underlying_price * 0.9
-            strike_max = underlying_price * 1.1
-            
-            # 计算到期日范围
-            max_expiry = datetime.utcnow() + timedelta(days=expiry_days_range)
-            
-            # 筛选符合条件的期权合约
-            filtered_markets = []
-            
-            for market in markets:
-                # 提取执行价格和到期日
-                strike_price = None
-                expiry_date = None
-                
-                if 'strike' in market and market['strike']:
-                    strike_price = float(market['strike'])
-                
-                if 'expiryDate' in market and market['expiryDate']:
-                    expiry_date = datetime.strptime(market['expiryDate'], '%Y-%m-%d')
-                elif 'expiry' in market and market['expiry']:
-                    # 不同交易所可能使用不同格式的到期日
-                    try:
-                        expiry_date = datetime.fromtimestamp(market['expiry'] / 1000)
-                    except:
-                        try:
-                            expiry_date = datetime.strptime(market['expiry'], '%Y-%m-%d')
-                        except:
-                            continue
-                
-                # 检查是否在执行价格范围内
-                if strike_price and strike_min <= strike_price <= strike_max:
-                    # 检查是否在到期日范围内
-                    if expiry_date and expiry_date <= max_expiry:
-                        filtered_markets.append(market)
-            
-            logger.info(f"从 {exchange_id} 筛选出 {len(filtered_markets)} 个符合条件的 {symbol} 期权合约")
-            
-            # 获取期权数据
-            option_data = []
-            
-            for market in filtered_markets:
-                try:
-                    # 获取行情数据
-                    ticker = self._get_option_ticker(exchange_id, market['symbol'])
-                    
-                    if not ticker:
-                        continue
-                    
-                    # 提取期权价格
-                    option_price = self._get_option_price(ticker)
-                    
-                    if not option_price:
-                        continue
-                    
-                    # 获取成交量和持仓量数据
-                    volume_data = self._get_volume_data(exchange_id, ticker, market)
-                    
-                    # 构建期权数据
-                    data = {
-                        'symbol': symbol,
-                        'exchange': exchange_id,
-                        'timestamp': datetime.utcnow(),
-                        'expiration_date': datetime.strptime(market['expiryDate'], '%Y-%m-%d').date() if 'expiryDate' in market else None,
-                        'strike_price': float(market['strike']) if 'strike' in market else None,
-                        'option_type': market['option'].lower() if 'option' in market else None,  # 'call' 或 'put'
-                        'underlying_price': underlying_price,
-                        'option_price': option_price,
-                        'volume': volume_data.get('volume', 0),
-                        'open_interest': volume_data.get('open_interest', 0),
-                        'implied_volatility': ticker.get('info', {}).get('impliedVolatility', None),
-                        'delta': ticker.get('info', {}).get('delta', None),
-                        'gamma': ticker.get('info', {}).get('gamma', None),
-                        'theta': ticker.get('info', {}).get('theta', None),
-                        'vega': ticker.get('info', {}).get('vega', None)
-                    }
-                    
-                    option_data.append(data)
-                    
-                except Exception as e:
-                    logger.warning(f"处理 {market['symbol']} 的期权数据时出错: {str(e)}")
-                    continue
-            
-            return option_data
-            
-        except Exception as e:
-            logger.error(f"获取 {exchange_id} 的 {symbol} 期权数据时出错: {str(e)}")
-            return []
-    
-    def get_underlying_price(self, exchange_id: str, symbol: str, timeframe: str = None) -> Optional[float]:
-        """
-        获取特定交易所的标的资产价格
+    return {
+        "Authorization": f"deri-hmac-sha256 id={api_key},ts={timestamp},nonce={nonce},sig={signature}"
+    }
+
+def get_instrument_data(symbol, kind="option"):
+    """获取期权合约信息"""
+    try:
+        url = f"{BASE_URL}/api/v2/public/get_instruments"
+        params = {
+            "currency": symbol,
+            "kind": kind,
+            "expired": False
+        }
         
-        Args:
-            exchange_id: 交易所ID
-            symbol: 交易对符号（简化格式，如'BTC'或'ETH'）
-            timeframe: 时间段，例如 '1d' 表示获取1天前的收盘价
-            
-        Returns:
-            标的资产价格，如果获取失败则返回None
-        """
-        try:
-            if exchange_id not in self.exchanges:
-                logger.warning(f"不支持的交易所: {exchange_id}")
-                return None
-            
-            # 标准化symbol格式
-            base_symbol = symbol.split('-')[0].split('/')[0].upper()  # 提取BTC或ETH
-            if base_symbol not in ['BTC', 'ETH']:
-                logger.warning(f"不支持的交易对符号: {symbol}")
-                return None
-                
-            # 从映射中获取对应交易所的市场符号
-            if base_symbol not in EXCHANGE_SYMBOLS.get(exchange_id, {}):
-                logger.warning(f"交易所 {exchange_id} 不支持 {base_symbol}")
-                return None
-                
-            market_symbol = EXCHANGE_SYMBOLS[exchange_id][base_symbol]
-            exchange = self.exchanges[exchange_id]
-            
-            # 提前加载市场数据（某些情况下可能需要）
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get("result"):
+            return data["result"]
+        else:
+            logger.error(f"Error fetching instrument data: {data.get('error', 'Unknown error')}")
+            return []
+    except Exception as e:
+        logger.error(f"Exception fetching instrument data: {str(e)}")
+        return []
+
+def get_ticker_data(instrument_name):
+    """获取指定合约的报价信息"""
+    try:
+        url = f"{BASE_URL}/api/v2/public/ticker"
+        params = {"instrument_name": instrument_name}
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get("result"):
+            return data["result"]
+        else:
+            logger.error(f"Error fetching ticker data for {instrument_name}: {data.get('error', 'Unknown error')}")
+            return None
+    except Exception as e:
+        logger.error(f"Exception fetching ticker data for {instrument_name}: {str(e)}")
+        return None
+
+def get_underlying_price(symbol):
+    """获取标的资产当前价格"""
+    try:
+        currency = symbol.upper()
+        # 使用正确的API端点来获取价格
+        url = f"{BASE_URL}/api/v2/public/get_index"
+        params = {"currency": currency}
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get("result"):
+            return data["result"][currency]
+        else:
+            # 如果获取索引价格失败，尝试获取ticker价格
             try:
-                exchange.load_markets()
-            except Exception as e:
-                logger.warning(f"加载 {exchange_id} 市场数据时出错: {str(e)}")
-            
-            # 如果指定了timeframe，获取历史K线数据
-            if timeframe:
-                try:
-                    # 计算时间段
-                    now = datetime.utcnow()
-                    if timeframe == '1d':
-                        since = int((now - timedelta(days=1)).timestamp() * 1000)
-                        ccxt_timeframe = '1d'
-                    elif timeframe == '1h':
-                        since = int((now - timedelta(hours=1)).timestamp() * 1000)
-                        ccxt_timeframe = '1h'
-                    elif timeframe == '4h':
-                        since = int((now - timedelta(hours=4)).timestamp() * 1000)
-                        ccxt_timeframe = '4h'
-                    else:
-                        since = int((now - timedelta(days=1)).timestamp() * 1000)
-                        ccxt_timeframe = '1d'
-                    
-                    # 对于当前可用的K线数据，获取价格
-                    try:
-                        logger.info(f"从 {exchange_id} 获取 {market_symbol} 的历史价格数据 (时间段: {ccxt_timeframe})")
-                        ohlcv = exchange.fetch_ohlcv(market_symbol, ccxt_timeframe, since, limit=2)
-                        if ohlcv and len(ohlcv) > 0:
-                            # 返回第一条记录的收盘价 (OHLCV中第4个元素是收盘价)
-                            price = float(ohlcv[0][4])
-                            logger.info(f"获取到 {exchange_id} 的 {market_symbol} 历史价格: {price}")
-                            return price
-                        else:
-                            logger.warning(f"未获取到 {exchange_id} 的 {market_symbol} 历史K线数据")
-                    except Exception as e:
-                        logger.warning(f"获取 {exchange_id} 的 {market_symbol} 历史价格时出错: {str(e)}")
-                        
-                        # 如果实时API调用失败，可以使用模拟数据
-                        if USE_MOCK_DATA:
-                            logger.info(f"使用模拟数据获取 {base_symbol} 的历史价格")
-                            mock_ohlcv = get_mock_ohlcv(base_symbol, ccxt_timeframe, 2)
-                            if mock_ohlcv and len(mock_ohlcv) > 0:
-                                mock_price = float(mock_ohlcv[0][4])  # 收盘价
-                                logger.info(f"使用模拟的 {base_symbol} 历史价格: {mock_price}")
-                                return mock_price
-                except Exception as e:
-                    logger.warning(f"处理 {exchange_id} 的 {market_symbol} 历史价格时出错: {str(e)}")
-            
-            # 获取当前价格
-            try:
-                logger.info(f"从 {exchange_id} 获取 {market_symbol} 的当前价格")
-                ticker = exchange.fetch_ticker(market_symbol)
-                if ticker and 'last' in ticker and ticker['last']:
-                    price = float(ticker['last'])
-                    logger.info(f"获取到 {exchange_id} 的 {market_symbol} 当前价格: {price}")
-                    return price
+                instrument_name = f"{currency}-PERPETUAL"
+                url = f"{BASE_URL}/api/v2/public/ticker"
+                params = {"instrument_name": instrument_name}
+                
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("result"):
+                    return data["result"]["last_price"]
                 else:
-                    logger.warning(f"未获取到 {exchange_id} 的 {market_symbol} 价格数据")
+                    logger.error(f"Error fetching ticker price for {symbol}: {data.get('error', 'Unknown error')}")
+                    return None
             except Exception as e:
-                logger.error(f"获取 {exchange_id} 的 {market_symbol} 当前价格时出错: {str(e)}")
-                
-                # 如果实时API调用失败，可以使用模拟数据
-                if USE_MOCK_DATA:
-                    logger.info(f"使用模拟数据获取 {base_symbol} 的当前价格")
-                    mock_price = get_mock_price(base_symbol, True)
-                    logger.info(f"使用模拟的 {base_symbol} 当前价格: {mock_price}")
-                    return mock_price
-            
-            # 如果所有方法都失败，返回模拟价格或None
-            if USE_MOCK_DATA:
-                mock_price = get_mock_price(base_symbol, False)
-                logger.info(f"所有实时数据获取方法失败，使用基础模拟价格: {mock_price}")
-                return mock_price
-                
-            return None
-            
-        except Exception as e:
-            logger.error(f"获取 {exchange_id} 的 {symbol} 标的价格时出错: {str(e)}")
-            return None
-    
-    def _format_symbol(self, exchange_id: str, symbol: str) -> str:
-        """根据交易所格式化交易对符号"""
-        # 标准化符号格式：移除可能的后缀，只保留基础货币符号
-        base_symbol = symbol.split('-')[0].split('/')[0].upper()
+                logger.error(f"Exception fetching ticker price for {symbol}: {str(e)}")
+                return None
+    except Exception as e:
+        logger.error(f"Exception fetching underlying price for {symbol}: {str(e)}")
+        return None
+
+def get_option_market_data(symbol):
+    """获取期权市场数据"""
+    try:
+        # 获取当前价格
+        current_price = get_underlying_price(symbol)
+        if not current_price:
+            logger.error(f"Failed to get current price for {symbol}")
+            return []
         
-        if base_symbol not in ['BTC', 'ETH']:
-            logger.warning(f"不支持的币种: {symbol}，将使用原始符号")
-            return symbol
+        # 获取所有活跃的期权合约
+        instruments = get_instrument_data(symbol, "option")
+        if not instruments:
+            logger.error(f"No instruments found for {symbol}")
+            return []
+            
+        # 筛选期权合约
+        filtered_instruments = filter_instruments(instruments, current_price)
+        logger.info(f"Found {len(filtered_instruments)} relevant option instruments for {symbol}")
         
-        # 返回标准化的符号
-        return base_symbol
-    
-    def _get_option_ticker(self, exchange_id: str, symbol: str) -> Dict[str, Any]:
-        """获取期权合约的行情数据"""
-        try:
-            if exchange_id not in self.exchanges:
-                return {}
-            
-            exchange = self.exchanges[exchange_id]
-            ticker = exchange.fetch_ticker(symbol)
-            
-            return ticker
-            
-        except Exception as e:
-            logger.warning(f"获取 {symbol} 的行情数据时出错: {str(e)}")
-            return {}
-    
-    def _get_option_price(self, ticker: Dict[str, Any]) -> Optional[float]:
-        """从行情数据中提取期权价格"""
-        try:
-            if 'last' in ticker and ticker['last']:
-                return float(ticker['last'])
-            
-            if 'close' in ticker and ticker['close']:
-                return float(ticker['close'])
-            
-            if 'bid' in ticker and ticker['bid'] and 'ask' in ticker and ticker['ask']:
-                return (float(ticker['bid']) + float(ticker['ask'])) / 2
-            
-            return None
-            
-        except Exception as e:
-            logger.warning(f"提取期权价格时出错: {str(e)}")
-            return None
-    
-    def _get_volume_data(self, exchange_id: str, ticker: Dict[str, Any], market: Dict[str, Any]) -> Dict[str, Any]:
-        """从行情数据中提取成交量和持仓量信息"""
-        volume = 0
-        open_interest = 0
+        option_data = []
+        # 获取每个合约的详细数据
+        for instrument in filtered_instruments:
+            ticker_data = get_ticker_data(instrument["instrument_name"])
+            if ticker_data:
+                option_data.append({
+                    "symbol": symbol,
+                    "instrument_name": instrument["instrument_name"],
+                    "expiration_date": instrument["expiration_timestamp"],
+                    "strike_price": instrument["strike"],
+                    "option_type": "call" if instrument["option_type"] == "call" else "put",
+                    "underlying_price": current_price,
+                    "option_price": (ticker_data["best_bid_price"] + ticker_data["best_ask_price"]) / 2 if ticker_data["best_bid_price"] and ticker_data["best_ask_price"] else ticker_data["mark_price"],
+                    "volume": ticker_data["stats"]["volume"],
+                    "open_interest": ticker_data["open_interest"],
+                    "implied_volatility": ticker_data["mark_iv"] / 100 if ticker_data["mark_iv"] else None,
+                    "delta": ticker_data["greeks"]["delta"] if ticker_data.get("greeks") else None,
+                    "gamma": ticker_data["greeks"]["gamma"] if ticker_data.get("greeks") else None,
+                    "theta": ticker_data["greeks"]["theta"] if ticker_data.get("greeks") else None,
+                    "vega": ticker_data["greeks"]["vega"] if ticker_data.get("greeks") else None,
+                    "timestamp": datetime.utcnow()
+                })
         
-        try:
-            # 提取成交量
-            if 'volume' in ticker and ticker['volume']:
-                volume = float(ticker['volume'])
-            
-            # 提取持仓量
-            if 'info' in ticker and 'openInterest' in ticker['info']:
-                open_interest = float(ticker['info']['openInterest'])
-            
-            # Deribit特定处理
-            if exchange_id == 'deribit' and 'info' in ticker:
-                if 'volume' in ticker['info']:
-                    volume = float(ticker['info']['volume'])
-                if 'openInterest' in ticker['info']:
-                    open_interest = float(ticker['info']['openInterest'])
-            
-            # OKX特定处理
-            if exchange_id == 'okx' and 'info' in ticker:
-                if 'volCcy24h' in ticker['info']:
-                    volume = float(ticker['info']['volCcy24h'])
-                if 'openInterest' in ticker['info']:
-                    open_interest = float(ticker['info']['openInterest'])
-            
-            return {
-                'volume': volume,
-                'open_interest': open_interest
-            }
-            
-        except Exception as e:
-            logger.warning(f"提取成交量和持仓量数据时出错: {str(e)}")
-            return {
-                'volume': 0,
-                'open_interest': 0
-            }
+        return option_data
+    except Exception as e:
+        logger.error(f"Exception in get_option_market_data for {symbol}: {str(e)}")
+        return []
+
+def filter_instruments(instruments, current_price):
+    """
+    筛选期权合约:
+    1. 执行价格与当前价格偏离不超过10%
+    2. 过滤掉成交量为0的合约
+    """
+    filtered = []
+    for instrument in instruments:
+        strike = instrument["strike"]
+        
+        # 计算偏离率
+        deviation_percent = abs((strike - current_price) / current_price * 100)
+        
+        # 只包含偏离率小于等于10%的合约
+        if deviation_percent <= 10:
+            filtered.append(instrument)
+    
+    # 按照期权到期日期排序
+    filtered.sort(key=lambda x: x["expiration_timestamp"])
+    
+    return filtered
+
+def get_market_data_websocket(symbol):
+    """
+    使用WebSocket连接获取市场数据
+    仅作为示例，实际应用中需要实现完整的WebSocket客户端
+    """
+    pass

@@ -1,210 +1,121 @@
-/* 全局样式 */
+/* Custom CSS for the Options Market Risk Monitoring System */
+
+/* Main theme overrides */
 :root {
-    --sidebar-width: 240px;
-    --sidebar-collapsed-width: 70px;
+    --custom-primary: #4e73df;
+    --custom-success: #1cc88a;
+    --custom-info: #36b9cc;
+    --custom-warning: #f6c23e;
+    --custom-danger: #e74a3b;
+    --custom-secondary: #858796;
+    --custom-light: #f8f9fc;
+    --custom-dark: #5a5c69;
 }
 
-body {
-    overflow-x: hidden;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+/* Dashboard risk indicators */
+.risk-indicator {
+    height: 8px;
+    border-radius: 4px;
+    transition: width 0.5s ease;
 }
 
-/* 布局样式 */
-.wrapper {
-    display: flex;
-    width: 100%;
-    align-items: stretch;
+/* Card styling */
+.risk-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-#sidebar {
-    min-width: var(--sidebar-width);
-    max-width: var(--sidebar-width);
-    transition: all 0.3s;
-    height: 100vh;
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 1000;
-    overflow-y: auto;
-}
-
-#sidebar .sidebar-header {
-    padding: 20px;
-    background: rgba(0, 0, 0, 0.1);
-}
-
-#sidebar ul.nav {
-    padding: 20px 0;
-}
-
-#sidebar .nav-item {
-    padding: 0 15px;
-}
-
-#sidebar .nav-link {
-    padding: 10px 15px;
-    border-radius: 6px;
-    transition: all 0.2s;
-    color: rgba(255, 255, 255, 0.75);
-}
-
-#sidebar .nav-link:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.1);
-}
-
-#sidebar .nav-link.active {
-    color: #fff;
-    background: rgba(40, 167, 69, 0.8);
-}
-
-#content {
-    width: 100%;
-    min-height: 100vh;
-    transition: all 0.3s;
-    margin-left: var(--sidebar-width);
-}
-
-.sidebar-collapsed #sidebar {
-    min-width: var(--sidebar-collapsed-width);
-    max-width: var(--sidebar-collapsed-width);
-}
-
-.sidebar-collapsed #content {
-    margin-left: var(--sidebar-collapsed-width);
-}
-
-.sidebar-collapsed #sidebar .sidebar-header h3,
-.sidebar-collapsed #sidebar .nav-link span {
-    display: none;
-}
-
-.sidebar-collapsed #sidebar .nav-item {
-    text-align: center;
-    padding: 0 5px;
-}
-
-.sidebar-collapsed #sidebar .nav-link i {
-    margin-right: 0;
-    font-size: 1.2rem;
-}
-
-/* 卡片样式 */
-.card {
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    transition: all 0.2s;
-    border: none;
-    border-radius: 0.5rem;
-}
-
-.card:hover {
+.risk-card:hover {
+    transform: translateY(-5px);
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
 }
 
 .card-header {
-    background-color: rgba(0, 0, 0, 0.03);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    font-weight: 700;
 }
 
-/* 加载指示器 */
-.spinner-border {
-    width: 3rem;
-    height: 3rem;
+/* Alert styling */
+.alert-attention {
+    background-color: var(--bs-info);
+    color: white;
 }
 
-/* 风险指标样式 */
-.text-success {
-    color: var(--bs-success) !important;
+.alert-warning {
+    background-color: var(--bs-warning);
+    color: white;
 }
 
-.text-warning {
-    color: var(--bs-warning) !important;
+.alert-severe {
+    background-color: var(--bs-danger);
+    color: white;
 }
 
-.text-danger {
-    color: var(--bs-danger) !important;
+/* Scenario analysis */
+tr.highlight {
+    animation: highlight-row 2s;
 }
 
-/* 图表容器 */
+@keyframes highlight-row {
+    0% { background-color: rgba(var(--bs-info-rgb), 0.2); }
+    100% { background-color: transparent; }
+}
+
+/* Charts */
 .chart-container {
     position: relative;
-    height: 300px;
+    height: 350px;
+    margin-bottom: 1.5rem;
 }
 
-/* 移动端响应式样式 */
-@media (max-width: 768px) {
-    #sidebar {
-        min-width: var(--sidebar-collapsed-width);
-        max-width: var(--sidebar-collapsed-width);
-    }
-    
-    #content {
-        margin-left: var(--sidebar-collapsed-width);
-    }
-    
-    #sidebar .sidebar-header h3,
-    #sidebar .nav-link span {
-        display: none;
-    }
-    
-    #sidebar .nav-item {
-        text-align: center;
-        padding: 0 5px;
-    }
-    
-    #sidebar .nav-link i {
-        margin-right: 0;
-        font-size: 1.2rem;
-    }
+/* Toast container */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
 }
 
-/* 表格样式 */
-.table thead th {
-    background-color: rgba(0, 0, 0, 0.03);
-    font-weight: 600;
-    border-top: none;
+/* Override some Bootstrap styles for dark theme compatibility */
+.table {
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--bs-border-color);
 }
 
-.table-hover tbody tr:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+/* Risk card headers */
+.risk-level {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05rem;
+    text-transform: uppercase;
 }
 
-/* 进度条样式 */
-.progress {
-    background-color: rgba(0, 0, 0, 0.1);
+.risk-value {
+    font-size: 1.8rem;
+    font-weight: 700;
 }
 
-/* 自定义修复 */
-[data-bs-theme="dark"] .form-select {
+/* Custom badge colors for market sentiment */
+.badge-risk-on {
+    background-color: var(--bs-success);
+}
+
+.badge-risk-off {
+    background-color: var(--bs-danger);
+}
+
+/* Historical data filters */
+.filter-group {
+    margin-bottom: 1rem;
+}
+
+/* Scenario analysis form */
+.scenario-controls .form-label {
+    font-weight: 500;
+}
+
+.scenario-results th {
+    position: sticky;
+    top: 0;
     background-color: var(--bs-dark);
-    color: var(--bs-light);
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-bs-theme="dark"] .card {
-    background-color: var(--bs-dark);
-    color: var(--bs-light);
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-bs-theme="dark"] .card-header {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-bs-theme="dark"] .table {
-    color: var(--bs-light);
-}
-
-[data-bs-theme="dark"] .table thead th {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-bs-theme="dark"] .table td {
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-bs-theme="dark"] .text-muted {
-    color: rgba(255, 255, 255, 0.6) !important;
+    z-index: 10;
 }

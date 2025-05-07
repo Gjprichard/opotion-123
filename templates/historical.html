@@ -1,155 +1,167 @@
 {% extends 'layout.html' %}
 
 {% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h3 mb-0 text-gray-800">Historical Options Data</h1>
+        <p class="text-muted">View and analyze historical option pricing and risk metrics</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- Filters -->
+    <div class="col-lg-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold">Data Filters</h6>
+            </div>
+            <div class="card-body">
+                <form id="historical-filter-form">
+                    <div class="row">
+                        <div class="col-md-2 filter-group">
+                            <label for="symbol-filter" class="form-label">Symbol</label>
+                            <select id="symbol-filter" class="form-select">
+                                {% for sym in symbols %}
+                                <option value="{{ sym }}" {% if sym == symbol %}selected{% endif %}>{{ sym }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 filter-group">
+                            <label for="option-type-filter" class="form-label">Option Type</label>
+                            <select id="option-type-filter" class="form-select">
+                                <option value="call" {% if option_type == 'call' %}selected{% endif %}>Call</option>
+                                <option value="put" {% if option_type == 'put' %}selected{% endif %}>Put</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 filter-group">
+                            <label for="expiration-filter" class="form-label">Expiration</label>
+                            <select id="expiration-filter" class="form-select">
+                                <option value="">All Expirations</option>
+                                {% for exp in expirations %}
+                                <option value="{{ exp }}">{{ exp }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 filter-group">
+                            <label for="strike-filter" class="form-label">Strike Price</label>
+                            <input type="number" id="strike-filter" class="form-control" placeholder="Enter strike">
+                        </div>
+                        <div class="col-md-2 filter-group">
+                            <label for="time-period-filter" class="form-label">{{ t('time_period') }}</label>
+                            <select id="time-period-filter" class="form-select">
+                                {% for period_key, period_info in time_periods.items() %}
+                                <option value="{{ period_key }}" {% if period_key == current_time_period %}selected{% endif %}>
+                                    {{ period_info.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 filter-group">
+                            <label for="days-filter" class="form-label">Time Range</label>
+                            <select id="days-filter" class="form-select">
+                                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 Days</option>
+                                <option value="14" {% if days == 14 %}selected{% endif %}>Last 14 Days</option>
+                                <option value="30" {% if days == 30 or not days %}selected{% endif %}>Last 30 Days</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 filter-group">
+                            <label class="form-label">&nbsp;</label>
+                            <button id="apply-filters" type="button" class="btn btn-primary w-100">
+                                <i class="fas fa-filter"></i> Apply Filters
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold">Option Price & Implied Volatility</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="price-iv-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold">Option Greeks</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="greeks-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Table -->
 <div class="row">
-    <!-- 筛选器 -->
-    <div class="col-md-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title">筛选器</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <label for="symbol-select" class="form-label">资产</label>
-                        <select class="form-select" id="symbol-select">
-                            {% for symbol in symbols %}
-                            <option value="{{ symbol }}" {% if symbol == default_symbol %}selected{% endif %}>{{ symbol }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="time-period-select" class="form-label">时间周期</label>
-                        <select class="form-select" id="time-period-select">
-                            {% for period in time_periods %}
-                            <option value="{{ period }}" {% if period == default_time_period %}selected{% endif %}>{{ period }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="days-select" class="form-label">数据天数</label>
-                        <select class="form-select" id="days-select">
-                            <option value="7">7天</option>
-                            <option value="14">14天</option>
-                            <option value="30" selected>30天</option>
-                            <option value="60">60天</option>
-                            <option value="90">90天</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button type="button" class="btn btn-primary" id="apply-filter-btn">
-                            <i class="fas fa-filter me-1"></i> 应用筛选
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 历史数据图表 -->
-    <div class="col-md-12 mb-4">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title">历史风险指标趋势</h5>
+    <div class="col-lg-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold">Options Data</h6>
                 <div class="btn-group">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-volatility">波动率指标</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-pcr">看跌/看涨比率</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-greeks">希腊字母敞口</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-risk">风险评级</button>
+                    <button id="refresh-data" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <button id="export-csv" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="position: relative; height:400px;">
-                    <canvas id="historical-chart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 数据统计 -->
-    <div class="col-md-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title">数据统计</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">平均波动率指数</h6>
-                                <h3 class="card-title" id="avg-volatility">--</h3>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">平均看跌/看涨比率</h6>
-                                <h3 class="card-title" id="avg-pcr">--</h3>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">最大波动率</h6>
-                                <h3 class="card-title" id="max-volatility">--</h3>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">最大看跌/看涨比率</h6>
-                                <h3 class="card-title" id="max-pcr">--</h3>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="row mt-3">
-                    <div class="col-md-12">
-                        <div class="alert alert-info" id="trend-analysis">
-                            <i class="fas fa-chart-line me-2"></i> 选择筛选条件以查看趋势分析。
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 历史数据表格 -->
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title">详细历史数据</h5>
-                <button class="btn btn-sm btn-outline-secondary" id="export-csv-btn">
-                    <i class="fas fa-download me-1"></i> 导出CSV
-                </button>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover" id="historical-table">
+                    <table class="table table-hover" id="options-table">
                         <thead>
                             <tr>
-                                <th>时间</th>
-                                <th>波动率指数</th>
-                                <th>波动率偏斜</th>
-                                <th>看跌/看涨比率</th>
-                                <th>市场情绪</th>
-                                <th>Delta敞口</th>
-                                <th>Gamma敞口</th>
-                                <th>Vega敞口</th>
-                                <th>风险等级</th>
+                                <th>Date/Time</th>
+                                <th>Strike</th>
+                                <th>Expiration</th>
+                                <th>Option Price</th>
+                                <th>Underlying</th>
+                                <th>IV (%)</th>
+                                <th>Delta</th>
+                                <th>Gamma</th>
+                                <th>Theta</th>
+                                <th>Vega</th>
                             </tr>
                         </thead>
                         <tbody>
+                            {% for opt in options %}
                             <tr>
-                                <td colspan="9" class="text-center">加载数据...</td>
+                                <td>{{ opt.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ opt.strike_price }}</td>
+                                <td>{{ opt.expiration_date }}</td>
+                                <td>{{ opt.option_price|round(2) }}</td>
+                                <td>{{ opt.underlying_price|round(2) }}</td>
+                                <td>{{ (opt.implied_volatility * 100)|round(2) }}</td>
+                                <td>{{ opt.delta|round(3) }}</td>
+                                <td>{{ opt.gamma|round(4) }}</td>
+                                <td>{{ opt.theta|round(3) }}</td>
+                                <td>{{ opt.vega|round(3) }}</td>
                             </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
+                {% if not options %}
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-database fa-3x mb-3"></i>
+                    <p class="lead">No options data found for the selected filters</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -157,465 +169,308 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/charts.js"></script>
 <script>
-    // 全局图表对象
-    let historicalChart = null;
-    
-    // 全局数据
-    let globalData = [];
-    
-    // 当前视图模式
-    let currentView = 'volatility';
-    
-    // 加载历史数据
-    function loadHistoricalData() {
-        const symbol = $('#symbol-select').val();
-        const timePeriod = $('#time-period-select').val();
-        const days = $('#days-select').val();
-        
-        // 显示加载状态
-        $('#historical-table tbody').html('<tr><td colspan="9" class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> 正在加载数据...</td></tr>');
-        $('#avg-volatility, #avg-pcr, #max-volatility, #max-pcr').text('加载中...');
-        $('#trend-analysis').html('<div class="spinner-border spinner-border-sm" role="status"></div> 正在分析趋势...');
-        
-        // 请求数据
-        $.ajax({
-            url: `/api/historical-data?symbol=${symbol}&time_period=${timePeriod}&days=${days}`,
-            method: 'GET',
-            success: function(response) {
-                globalData = response;
-                updateHistoricalView();
-            },
-            error: function(xhr, status, error) {
-                console.error('获取历史数据失败:', error);
-                $('#historical-table tbody').html('<tr><td colspan="9" class="text-center text-danger">获取数据失败，请稍后重试。</td></tr>');
-                $('#trend-analysis').html('<i class="fas fa-exclamation-triangle me-2"></i> 获取数据失败，请稍后重试。');
-            }
-        });
+document.addEventListener('DOMContentLoaded', function() {
+    let priceIvChart = null;
+    let greeksChart = null;
+    let historicalData = [];
+
+    // Initialize charts if there's data
+    {% if options %}
+    fetchHistoricalData();
+    {% endif %}
+
+    // Set up event listeners
+    document.getElementById('apply-filters').addEventListener('click', applyFilters);
+    document.getElementById('refresh-data').addEventListener('click', refreshData);
+    document.getElementById('export-csv').addEventListener('click', exportCsv);
+
+    // Handle filter form submission
+    function applyFilters() {
+        const symbol = document.getElementById('symbol-filter').value;
+        const optionType = document.getElementById('option-type-filter').value;
+        const expiration = document.getElementById('expiration-filter').value;
+        const strike = document.getElementById('strike-filter').value;
+        const days = document.getElementById('days-filter').value;
+        const timePeriod = document.getElementById('time-period-filter').value;
+
+        // Redirect to the filtered view
+        window.location.href = `/historical?symbol=${symbol}&type=${optionType}&days=${days}&time_period=${timePeriod}${expiration ? '&expiration=' + expiration : ''}${strike ? '&strike=' + strike : ''}`;
     }
-    
-    // 更新历史数据视图
-    function updateHistoricalView() {
-        // 如果数据为空
-        if (!globalData || globalData.length === 0) {
-            $('#historical-table tbody').html('<tr><td colspan="9" class="text-center">没有可用数据</td></tr>');
-            $('#avg-volatility, #avg-pcr, #max-volatility, #max-pcr').text('--');
-            $('#trend-analysis').html('<i class="fas fa-info-circle me-2"></i> 没有可用的历史数据。');
-            return;
-        }
+
+    // Fetch historical data for charts
+    function fetchHistoricalData() {
+        const symbol = document.getElementById('symbol-filter').value;
+        const optionType = document.getElementById('option-type-filter').value;
+        const expiration = document.getElementById('expiration-filter').value;
+        const strike = document.getElementById('strike-filter').value;
+        const timePeriod = document.getElementById('time-period-filter').value;
         
-        // 更新表格
-        updateTable();
-        
-        // 更新统计数据
-        updateStats();
-        
-        // 更新图表
-        updateChart();
-        
-        // 更新趋势分析
-        updateTrendAnalysis();
-    }
-    
-    // 更新表格
-    function updateTable() {
-        let tableHtml = '';
-        
-        // 按时间降序排序
-        const sortedData = [...globalData].sort((a, b) => {
-            return new Date(b.timestamp) - new Date(a.timestamp);
-        });
-        
-        for (const item of sortedData) {
-            const timestamp = new Date(item.timestamp).toLocaleString();
-            const volatilityIndex = formatNumber(item.volatility_index);
-            const volatilitySkew = formatNumber(item.volatility_skew);
-            const putCallRatio = formatNumber(item.put_call_ratio);
-            
-            // 设置市场情绪样式
-            let sentimentText, sentimentClass;
-            if (item.market_sentiment === 'bullish') {
-                sentimentText = '偏多';
-                sentimentClass = 'text-success';
-            } else if (item.market_sentiment === 'bearish') {
-                sentimentText = '偏空';
-                sentimentClass = 'text-danger';
-            } else {
-                sentimentText = '中性';
-                sentimentClass = 'text-info';
-            }
-            
-            // 设置风险等级样式
-            let riskText, riskClass;
-            if (item.risk_level === 'low') {
-                riskText = '低';
-                riskClass = 'text-success';
-            } else if (item.risk_level === 'medium') {
-                riskText = '中';
-                riskClass = 'text-warning';
-            } else if (item.risk_level === 'high') {
-                riskText = '高';
-                riskClass = 'text-danger';
-            } else if (item.risk_level === 'extreme') {
-                riskText = '极高';
-                riskClass = 'text-danger fw-bold';
-            } else {
-                riskText = '--';
-                riskClass = '';
-            }
-            
-            tableHtml += `
-                <tr>
-                    <td>${timestamp}</td>
-                    <td>${volatilityIndex}</td>
-                    <td>${volatilitySkew}</td>
-                    <td>${putCallRatio}</td>
-                    <td class="${sentimentClass}">${sentimentText}</td>
-                    <td>${formatNumber(item.delta_exposure)}</td>
-                    <td>${formatNumber(item.gamma_exposure)}</td>
-                    <td>${formatNumber(item.vega_exposure)}</td>
-                    <td class="${riskClass}">${riskText}</td>
-                </tr>
-            `;
-        }
-        
-        $('#historical-table tbody').html(tableHtml);
-    }
-    
-    // 更新统计数据
-    function updateStats() {
-        // 计算平均值
-        const volatilityValues = globalData.map(item => item.volatility_index).filter(v => v !== null && v !== undefined);
-        const pcrValues = globalData.map(item => item.put_call_ratio).filter(v => v !== null && v !== undefined);
-        
-        const avgVolatility = volatilityValues.length > 0 ? volatilityValues.reduce((a, b) => a + b, 0) / volatilityValues.length : 0;
-        const avgPcr = pcrValues.length > 0 ? pcrValues.reduce((a, b) => a + b, 0) / pcrValues.length : 0;
-        
-        // 计算最大值
-        const maxVolatility = volatilityValues.length > 0 ? Math.max(...volatilityValues) : 0;
-        const maxPcr = pcrValues.length > 0 ? Math.max(...pcrValues) : 0;
-        
-        // 更新UI
-        $('#avg-volatility').text(formatNumber(avgVolatility));
-        $('#avg-pcr').text(formatNumber(avgPcr));
-        $('#max-volatility').text(formatNumber(maxVolatility));
-        $('#max-pcr').text(formatNumber(maxPcr));
-    }
-    
-    // 更新图表
-    function updateChart() {
-        const ctx = document.getElementById('historical-chart').getContext('2d');
-        
-        // 如果图表已存在，销毁它
-        if (historicalChart) {
-            historicalChart.destroy();
-        }
-        
-        // 按时间升序排序
-        const sortedData = [...globalData].sort((a, b) => {
-            return new Date(a.timestamp) - new Date(b.timestamp);
-        });
-        
-        // 准备时间标签
-        const timestamps = sortedData.map(item => {
-            const date = new Date(item.timestamp);
-            return date.toLocaleString();
-        });
-        
-        // 根据当前视图设置数据集
-        let datasets = [];
-        
-        if (currentView === 'volatility') {
-            datasets = [
-                {
-                    label: '波动率指数',
-                    data: sortedData.map(item => item.volatility_index),
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderWidth: 2,
-                    tension: 0.3
-                },
-                {
-                    label: '波动率偏斜',
-                    data: sortedData.map(item => item.volatility_skew),
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    borderWidth: 2,
-                    tension: 0.3
-                }
-            ];
-        } else if (currentView === 'pcr') {
-            datasets = [
-                {
-                    label: '看跌/看涨比率',
-                    data: sortedData.map(item => item.put_call_ratio),
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                    borderWidth: 2,
-                    tension: 0.3
-                }
-            ];
-        } else if (currentView === 'greeks') {
-            datasets = [
-                {
-                    label: 'Delta敞口',
-                    data: sortedData.map(item => item.delta_exposure),
-                    borderColor: 'rgba(255, 159, 64, 1)',
-                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
-                    borderWidth: 2,
-                    tension: 0.3
-                },
-                {
-                    label: 'Gamma敞口',
-                    data: sortedData.map(item => item.gamma_exposure),
-                    borderColor: 'rgba(153, 102, 255, 1)',
-                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                    borderWidth: 2,
-                    tension: 0.3
-                },
-                {
-                    label: 'Vega敞口',
-                    data: sortedData.map(item => item.vega_exposure),
-                    borderColor: 'rgba(255, 206, 86, 1)',
-                    backgroundColor: 'rgba(255, 206, 86, 0.2)',
-                    borderWidth: 2,
-                    tension: 0.3
-                }
-            ];
-        } else if (currentView === 'risk') {
-            // 将风险等级转换为数值
-            const riskValues = sortedData.map(item => {
-                if (item.risk_level === 'low') return 0;
-                if (item.risk_level === 'medium') return 1;
-                if (item.risk_level === 'high') return 2;
-                if (item.risk_level === 'extreme') return 3;
-                return 0;
+        fetch(`/api/historical/data?symbol=${symbol}&type=${optionType}&time_period=${timePeriod}${expiration ? '&expiration=' + expiration : ''}${strike ? '&strike=' + strike : ''}`)
+            .then(response => response.json())
+            .then(data => {
+                historicalData = data;
+                createCharts(data);
+            })
+            .catch(error => {
+                console.error('Error fetching historical data:', error);
+                showToast('Error loading historical data', 'danger');
             });
-            
-            datasets = [
-                {
-                    label: '风险等级',
-                    data: riskValues,
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    borderWidth: 2,
-                    tension: 0.3,
-                    stepped: true
-                }
-            ];
+    }
+
+    // Create charts with the fetched data
+    function createCharts(data) {
+        // Sort data by timestamp
+        data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        // Extract the data for charts
+        const timestamps = data.map(item => item.timestamp);
+        const prices = data.map(item => item.price);
+        const ivs = data.map(item => item.iv * 100); // Convert to percentage
+        const deltas = data.map(item => item.delta);
+        const gammas = data.map(item => item.gamma);
+        const thetas = data.map(item => item.theta);
+        const vegas = data.map(item => item.vega);
+
+        // Create price and IV chart
+        const priceIvCtx = document.getElementById('price-iv-chart').getContext('2d');
+        if (priceIvChart) {
+            priceIvChart.destroy();
         }
-        
-        // 创建图表
-        historicalChart = new Chart(ctx, {
+
+        priceIvChart = new Chart(priceIvCtx, {
             type: 'line',
             data: {
                 labels: timestamps,
-                datasets: datasets
+                datasets: [
+                    {
+                        label: 'Option Price',
+                        data: prices,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        yAxisID: 'y',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Implied Volatility (%)',
+                        data: ivs,
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        yAxisID: 'y1',
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
                 plugins: {
+                    legend: {
+                        position: 'top',
+                    },
                     tooltip: {
                         mode: 'index',
                         intersect: false
-                    },
-                    legend: {
-                        position: 'top'
                     }
                 },
                 scales: {
                     x: {
                         ticks: {
-                            maxRotation: 45,
-                            minRotation: 45
+                            maxTicksLimit: 10
                         }
                     },
                     y: {
-                        beginAtZero: currentView === 'risk' ? true : false
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Option Price ($)'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Implied Volatility (%)'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
                     }
                 }
             }
         });
-        
-        // 如果是风险等级视图，添加自定义比例尺标签
-        if (currentView === 'risk') {
-            historicalChart.options.scales.y.ticks = {
-                callback: function(value) {
-                    if (value === 0) return '低';
-                    if (value === 1) return '中';
-                    if (value === 2) return '高';
-                    if (value === 3) return '极高';
-                    return '';
+
+        // Create Greeks chart
+        const greeksCtx = document.getElementById('greeks-chart').getContext('2d');
+        if (greeksChart) {
+            greeksChart.destroy();
+        }
+
+        greeksChart = new Chart(greeksCtx, {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [
+                    {
+                        label: 'Delta',
+                        data: deltas,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Gamma (x10)',
+                        data: gammas.map(g => g * 10), // Scale up for visibility
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Theta',
+                        data: thetas,
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Vega',
+                        data: vegas,
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 10
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Greek Values'
+                        }
+                    }
                 }
-            };
-            historicalChart.update();
-        }
-    }
-    
-    // 更新趋势分析
-    function updateTrendAnalysis() {
-        // 获取最后一段时期的数据趋势
-        const dataPoints = Math.min(7, globalData.length);
-        const recentData = [...globalData].sort((a, b) => {
-            return new Date(a.timestamp) - new Date(b.timestamp);
-        }).slice(-dataPoints);
-        
-        if (recentData.length < 2) {
-            $('#trend-analysis').html('<i class="fas fa-info-circle me-2"></i> 数据点不足，无法进行趋势分析。');
-            return;
-        }
-        
-        // 分析波动率趋势
-        const firstVol = recentData[0].volatility_index;
-        const lastVol = recentData[recentData.length - 1].volatility_index;
-        const volChange = (lastVol - firstVol) / firstVol * 100;
-        
-        // 分析PCR趋势
-        const firstPcr = recentData[0].put_call_ratio;
-        const lastPcr = recentData[recentData.length - 1].put_call_ratio;
-        const pcrChange = (lastPcr - firstPcr) / firstPcr * 100;
-        
-        // 生成趋势分析文本
-        let analysisText = '<i class="fas fa-chart-line me-2"></i> ';
-        
-        if (Math.abs(volChange) < 5 && Math.abs(pcrChange) < 10) {
-            analysisText += '最近期间市场指标保持相对稳定，没有显著的波动。';
-        } else {
-            // 波动率趋势
-            if (volChange > 10) {
-                analysisText += `波动率显著上升 (${formatNumber(volChange)}%)，`;
-            } else if (volChange > 5) {
-                analysisText += `波动率小幅上升 (${formatNumber(volChange)}%)，`;
-            } else if (volChange < -10) {
-                analysisText += `波动率显著下降 (${formatNumber(volChange)}%)，`;
-            } else if (volChange < -5) {
-                analysisText += `波动率小幅下降 (${formatNumber(volChange)}%)，`;
             }
-            
-            // PCR趋势
-            if (pcrChange > 20) {
-                analysisText += `看跌/看涨比率大幅上升 (${formatNumber(pcrChange)}%)，表明市场情绪转向看跌。`;
-            } else if (pcrChange > 10) {
-                analysisText += `看跌/看涨比率上升 (${formatNumber(pcrChange)}%)，市场情绪略偏看跌。`;
-            } else if (pcrChange < -20) {
-                analysisText += `看跌/看涨比率大幅下降 (${formatNumber(pcrChange)}%)，表明市场情绪转向看涨。`;
-            } else if (pcrChange < -10) {
-                analysisText += `看跌/看涨比率下降 (${formatNumber(pcrChange)}%)，市场情绪略偏看涨。`;
-            } else {
-                analysisText += `看跌/看涨比率相对稳定。`;
-            }
-        }
-        
-        // 添加风险等级评估
-        const lastRiskLevel = recentData[recentData.length - 1].risk_level;
-        
-        if (lastRiskLevel === 'extreme') {
-            analysisText += ` 当前风险等级为<strong class="text-danger">极高</strong>，建议密切关注市场变化并采取适当的风险管理措施。`;
-        } else if (lastRiskLevel === 'high') {
-            analysisText += ` 当前风险等级为<strong class="text-danger">高</strong>，市场可能面临较大波动，需谨慎操作。`;
-        } else if (lastRiskLevel === 'medium') {
-            analysisText += ` 当前风险等级为<strong class="text-warning">中等</strong>，市场相对稳定，但仍需注意潜在风险。`;
-        } else if (lastRiskLevel === 'low') {
-            analysisText += ` 当前风险等级为<strong class="text-success">低</strong>，市场表现稳定，风险相对较小。`;
-        }
-        
-        $('#trend-analysis').html(analysisText);
-    }
-    
-    // 格式化数字
-    function formatNumber(value) {
-        if (value === null || value === undefined) return '--';
-        return parseFloat(value).toFixed(2);
-    }
-    
-    // 导出CSV
-    function exportToCsv() {
-        if (!globalData || globalData.length === 0) {
-            alert('没有可导出的数据');
-            return;
-        }
-        
-        // 按时间升序排序
-        const sortedData = [...globalData].sort((a, b) => {
-            return new Date(a.timestamp) - new Date(b.timestamp);
         });
-        
-        // 准备CSV标题行
-        let csvContent = "时间,波动率指数,波动率偏斜,看跌/看涨比率,市场情绪,Delta敞口,Gamma敞口,Vega敞口,风险等级\n";
-        
-        // 添加数据行
-        for (const item of sortedData) {
-            const timestamp = new Date(item.timestamp).toLocaleString();
-            const marketSentiment = item.market_sentiment === 'bullish' ? '偏多' : (item.market_sentiment === 'bearish' ? '偏空' : '中性');
-            const riskLevel = item.risk_level === 'low' ? '低' : (item.risk_level === 'medium' ? '中' : (item.risk_level === 'high' ? '高' : '极高'));
-            
-            csvContent += `${timestamp},${formatNumber(item.volatility_index)},${formatNumber(item.volatility_skew)},${formatNumber(item.put_call_ratio)},${marketSentiment},${formatNumber(item.delta_exposure)},${formatNumber(item.gamma_exposure)},${formatNumber(item.vega_exposure)},${riskLevel}\n`;
+    }
+
+    // Refresh data
+    function refreshData() {
+        // Show loading indicator
+        const refreshBtn = document.getElementById('refresh-data');
+        refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Refreshing...';
+        refreshBtn.disabled = true;
+
+        // Apply current filters
+        applyFilters();
+    }
+
+    // Export data as CSV
+    function exportCsv() {
+        if (historicalData.length === 0) {
+            showToast('No data to export', 'warning');
+            return;
         }
+
+        // Convert data to CSV
+        const headers = ['Timestamp', 'Strike', 'Price', 'IV', 'Delta', 'Gamma', 'Theta', 'Vega', 'Underlying'];
+        const csvRows = [headers.join(',')];
+
+        for (const item of historicalData) {
+            const row = [
+                item.timestamp,
+                item.strike,
+                item.price,
+                item.iv,
+                item.delta,
+                item.gamma,
+                item.theta,
+                item.vega,
+                item.underlying
+            ];
+            csvRows.push(row.join(','));
+        }
+
+        const csvContent = 'data:text/csv;charset=utf-8,' + csvRows.join('\n');
+        const encodedUri = encodeURI(csvContent);
         
-        // 创建Blob并下载
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        
-        // 设置文件名包含当前日期和符号
-        const symbol = $('#symbol-select').val();
-        const now = new Date().toISOString().split('T')[0];
-        link.setAttribute("href", url);
-        link.setAttribute("download", `${symbol}_历史数据_${now}.csv`);
-        link.style.visibility = 'hidden';
-        
+        // Create download link
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `options_data_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     }
-    
-    // 页面加载时初始化
-    $(document).ready(function() {
-        // 绑定筛选按钮事件
-        $('#apply-filter-btn').click(function() {
-            loadHistoricalData();
+
+    // Show a toast notification
+    function showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toast-container');
+        
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        
+        const bsToast = new bootstrap.Toast(toast, {
+            autohide: true,
+            delay: 3000
         });
         
-        // 绑定视图切换按钮事件
-        $('#btn-volatility').click(function() {
-            currentView = 'volatility';
-            updateChart();
-            // 设置活动按钮
-            $(this).addClass('active').siblings().removeClass('active');
+        bsToast.show();
+        
+        // Remove the toast from the DOM after it's hidden
+        toast.addEventListener('hidden.bs.toast', function() {
+            toastContainer.removeChild(toast);
         });
-        
-        $('#btn-pcr').click(function() {
-            currentView = 'pcr';
-            updateChart();
-            // 设置活动按钮
-            $(this).addClass('active').siblings().removeClass('active');
-        });
-        
-        $('#btn-greeks').click(function() {
-            currentView = 'greeks';
-            updateChart();
-            // 设置活动按钮
-            $(this).addClass('active').siblings().removeClass('active');
-        });
-        
-        $('#btn-risk').click(function() {
-            currentView = 'risk';
-            updateChart();
-            // 设置活动按钮
-            $(this).addClass('active').siblings().removeClass('active');
-        });
-        
-        // 绑定导出CSV按钮事件
-        $('#export-csv-btn').click(function() {
-            exportToCsv();
-        });
-        
-        // 设置默认活动按钮
-        $('#btn-volatility').addClass('active');
-        
-        // 加载初始数据
-        loadHistoricalData();
-    });
+    }
+});
 </script>
 {% endblock %}
