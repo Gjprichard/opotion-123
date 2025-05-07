@@ -2,6 +2,7 @@ from app import app, db
 import routes  # noqa: F401
 from services.data_service import fetch_latest_option_data
 from services.risk_calculator import calculate_risk_indicators
+from services.deviation_monitor_service import calculate_deviation_metrics
 from config import Config
 import logging
 
@@ -11,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 def initialize_database():
     """
-    Initialize the database with some data for each tracked symbol
+    Initialize the database with real data for each tracked symbol
     """
     try:
         # Initialize data for each tracked symbol
         for symbol in Config.TRACKED_SYMBOLS:
-            logger.info(f"Initializing data for {symbol}...")
+            logger.info(f"Initializing data for {symbol} from real exchange APIs...")
             
             # Fetch latest option data for the symbol
             success = fetch_latest_option_data(symbol)
@@ -24,9 +25,11 @@ def initialize_database():
             if success:
                 # Calculate risk indicators based on the new data
                 calculate_risk_indicators(symbol)
+                # 计算期权执行价偏离指标
+                calculate_deviation_metrics(symbol)
                 logger.info(f"Successfully initialized data for {symbol}")
             else:
-                logger.error(f"Failed to initialize data for {symbol}")
+                logger.error(f"Failed to initialize data for {symbol} - please check API connections")
     except Exception as e:
         logger.error(f"Error initializing database: {str(e)}")
 

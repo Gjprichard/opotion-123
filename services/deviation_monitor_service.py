@@ -562,19 +562,8 @@ def get_call_put_volume_analysis(symbol, time_period='15m', days=7, include_hist
     }
     """
     try:
-        # 检查是否需要模拟其他交易所的数据
-        use_simulated_exchange_data = True
-        
-        # 查询系统设置表中是否有"use_simulated_exchange_data"设置
-        try:
-            from models import SystemSetting
-            setting = SystemSetting.query.filter_by(setting_name='use_simulated_exchange_data').first()
-            if setting:
-                use_simulated_exchange_data = setting.get_typed_value() in (True, 'true', 'True', '1')
-        except Exception as e:
-            logger.warning(f"获取use_simulated_exchange_data设置时出错: {str(e)}，将使用默认值True")
-            
-        logger.info(f"使用模拟交易所数据: {use_simulated_exchange_data}")
+        # 使用真实交易所数据
+        logger.info(f"使用真实交易所数据")
         # 设置时间范围
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(days=days)
@@ -634,8 +623,7 @@ def get_call_put_volume_analysis(symbol, time_period='15m', days=7, include_hist
             anomaly_call_count += anomaly_calls
             anomaly_put_count += anomaly_puts
             
-        # 禁用模拟数据，仅使用真实API数据
-        # 2025.05.06: 停用模拟数据，改为使用真实OKX交易所数据
+        # 使用真实交易所数据
         logger.info(f"使用真实交易所数据: {exchange_data.keys()}")
         
         # 计算总体统计数据
@@ -727,16 +715,7 @@ def get_call_put_volume_analysis(symbol, time_period='15m', days=7, include_hist
             # 保护措施，确保间隔数量不超过30
             intervals = min(intervals, 30)
             
-            # 获取市场价格基准线（用于模拟数据）
-            market_price_base = 0
-            try:
-                from services.data_service import get_base_price_for_symbol
-                market_price_base = get_base_price_for_symbol(symbol)
-            except:
-                # 默认价格
-                market_price_base = 90000 if symbol == 'BTC' else 1800 if symbol == 'ETH' else 1.0
-            
-            # 2025.05.06: 停用模拟数据，改为完全使用真实数据
+            # 记录分析信息
             logger.info(f"分析{symbol}在{time_period}时间周期的真实数据，数据区间: {days}天")
             
             # 生成历史数据
