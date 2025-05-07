@@ -1,121 +1,175 @@
-/* Custom CSS for the Options Market Risk Monitoring System */
+/* 自定义样式 */
 
-/* Main theme overrides */
-:root {
-    --custom-primary: #4e73df;
-    --custom-success: #1cc88a;
-    --custom-info: #36b9cc;
-    --custom-warning: #f6c23e;
-    --custom-danger: #e74a3b;
-    --custom-secondary: #858796;
-    --custom-light: #f8f9fc;
-    --custom-dark: #5a5c69;
+/* 增加视觉空间 */
+body {
+    padding-bottom: 2rem;
 }
 
-/* Dashboard risk indicators */
-.risk-indicator {
-    height: 8px;
-    border-radius: 4px;
-    transition: width 0.5s ease;
+/* 页脚固定在底部 */
+.footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
 }
 
-/* Card styling */
-.risk-card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* 风险指标卡片效果 */
+.card.bg-dark {
+    transition: all 0.3s ease;
 }
 
-.risk-card:hover {
+.card.bg-dark:hover {
     transform: translateY(-5px);
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
 
-.card-header {
-    font-weight: 700;
+/* 风险级别指示器 */
+.risk-level {
+    font-weight: bold;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    display: inline-block;
 }
 
-/* Alert styling */
+.risk-level.low {
+    background-color: rgba(40, 167, 69, 0.2);
+    color: var(--bs-success);
+}
+
+.risk-level.medium {
+    background-color: rgba(255, 193, 7, 0.2);
+    color: var(--bs-warning);
+}
+
+.risk-level.high {
+    background-color: rgba(220, 53, 69, 0.2);
+    color: var(--bs-danger);
+}
+
+.risk-level.extreme {
+    background-color: rgba(220, 53, 69, 0.3);
+    color: var(--bs-danger);
+    border: 1px solid var(--bs-danger);
+}
+
+/* 表格风格优化 */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
+/* 图表容器美化 */
+.chart-container {
+    margin: 10px 0;
+    border-radius: 5px;
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 刷新按钮动画 */
+@keyframes spin {
+    from {transform: rotate(0deg);}
+    to {transform: rotate(360deg);}
+}
+
+.fa-sync-alt.spin {
+    animation: spin 1s linear infinite;
+}
+
+/* 趋势指标标签 */
+.trend-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    margin-right: 5px;
+}
+
+.trend-up {
+    background-color: rgba(40, 167, 69, 0.2);
+    color: var(--bs-success);
+}
+
+.trend-down {
+    background-color: rgba(220, 53, 69, 0.2);
+    color: var(--bs-danger);
+}
+
+.trend-neutral {
+    background-color: rgba(108, 117, 125, 0.2);
+    color: var(--bs-secondary);
+}
+
+/* 交易所标签 */
+.exchange-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-right: 5px;
+}
+
+.exchange-deribit {
+    background-color: rgba(75, 192, 192, 0.2);
+    color: #4bc0c0;
+}
+
+.exchange-binance {
+    background-color: rgba(255, 159, 64, 0.2);
+    color: #ff9f40;
+}
+
+.exchange-okx {
+    background-color: rgba(54, 162, 235, 0.2);
+    color: #36a2eb;
+}
+
+/* 警告指示器 */
+.alert-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+}
+
 .alert-attention {
-    background-color: var(--bs-info);
-    color: white;
+    background-color: var(--bs-warning);
 }
 
 .alert-warning {
-    background-color: var(--bs-warning);
-    color: white;
+    background-color: var(--bs-danger);
+    animation: pulse 2s infinite;
 }
 
 .alert-severe {
     background-color: var(--bs-danger);
-    color: white;
+    animation: pulse 1s infinite;
 }
 
-/* Scenario analysis */
-tr.highlight {
-    animation: highlight-row 2s;
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
 }
 
-@keyframes highlight-row {
-    0% { background-color: rgba(var(--bs-info-rgb), 0.2); }
-    100% { background-color: transparent; }
-}
-
-/* Charts */
-.chart-container {
-    position: relative;
-    height: 350px;
-    margin-bottom: 1.5rem;
-}
-
-/* Toast container */
-#toast-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1050;
-}
-
-/* Override some Bootstrap styles for dark theme compatibility */
-.table {
-    --bs-table-color: var(--bs-body-color);
-    --bs-table-bg: transparent;
-    --bs-table-border-color: var(--bs-border-color);
-}
-
-/* Risk card headers */
-.risk-level {
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.05rem;
-    text-transform: uppercase;
-}
-
-.risk-value {
-    font-size: 1.8rem;
-    font-weight: 700;
-}
-
-/* Custom badge colors for market sentiment */
-.badge-risk-on {
-    background-color: var(--bs-success);
-}
-
-.badge-risk-off {
-    background-color: var(--bs-danger);
-}
-
-/* Historical data filters */
-.filter-group {
-    margin-bottom: 1rem;
-}
-
-/* Scenario analysis form */
-.scenario-controls .form-label {
-    font-weight: 500;
-}
-
-.scenario-results th {
-    position: sticky;
-    top: 0;
-    background-color: var(--bs-dark);
-    z-index: 10;
+/* 媒体查询优化移动端 */
+@media (max-width: 768px) {
+    .card-title {
+        font-size: 1rem;
+    }
+    
+    .card-body {
+        padding: 0.75rem;
+    }
+    
+    .chart-container {
+        height: 250px !important;
+    }
 }

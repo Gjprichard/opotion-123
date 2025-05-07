@@ -1,303 +1,467 @@
-// charts.js - Shared chart utilities and configuration
+// 图表处理脚本
 
-// Set default Chart.js options
-Chart.defaults.color = '#dee2e6';
-Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+// 图表配置常量
+const CHART_COLORS = {
+    // 主要颜色
+    primary: 'rgba(75, 192, 192, 1)',
+    secondary: 'rgba(54, 162, 235, 1)',
+    danger: 'rgba(255, 99, 132, 1)',
+    warning: 'rgba(255, 159, 64, 1)',
+    purple: 'rgba(153, 102, 255, 1)',
+    gray: 'rgba(201, 203, 207, 1)',
+    
+    // 填充颜色
+    primaryFill: 'rgba(75, 192, 192, 0.2)',
+    secondaryFill: 'rgba(54, 162, 235, 0.2)',
+    dangerFill: 'rgba(255, 99, 132, 0.2)',
+    warningFill: 'rgba(255, 159, 64, 0.2)',
+    purpleFill: 'rgba(153, 102, 255, 0.2)',
+    grayFill: 'rgba(201, 203, 207, 0.2)'
+};
 
-// Function to create a line chart
-function createLineChart(elementId, data, options = {}) {
-    const ctx = document.getElementById(elementId).getContext('2d');
-    
-    // Default options for line charts
-    const defaultOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'top',
-            },
-            tooltip: {
-                mode: 'index',
-                intersect: false
-            }
-        },
-        scales: {
-            x: {
-                ticks: {
-                    maxTicksLimit: 10
-                }
-            },
-            y: {
-                beginAtZero: options.beginAtZero !== undefined ? options.beginAtZero : true
-            }
-        }
-    };
-    
-    // Merge options
-    const chartOptions = {...defaultOptions, ...options};
-    
-    return new Chart(ctx, {
+// 日期格式化
+function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    return new Intl.DateTimeFormat('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+// 数值格式化
+function formatNumber(value, decimals = 2) {
+    if (value === null || value === undefined) return '--';
+    return parseFloat(value).toFixed(decimals);
+}
+
+// 获取波动率图表配置
+function getVolatilityChartConfig(timestamps, volatilityIndex, volatilitySkew) {
+    return {
         type: 'line',
-        data: data,
-        options: chartOptions
-    });
-}
-
-// Function to create a bar chart
-function createBarChart(elementId, data, options = {}) {
-    const ctx = document.getElementById(elementId).getContext('2d');
-    
-    // Default options for bar charts
-    const defaultOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'top',
-            },
-            tooltip: {
+        data: {
+            labels: timestamps,
+            datasets: [
+                {
+                    label: '波动率指数',
+                    data: volatilityIndex,
+                    borderColor: CHART_COLORS.primary,
+                    backgroundColor: CHART_COLORS.primaryFill,
+                    borderWidth: 2,
+                    tension: 0.3,
+                    yAxisID: 'y'
+                },
+                {
+                    label: '波动率偏斜',
+                    data: volatilitySkew,
+                    borderColor: CHART_COLORS.danger,
+                    backgroundColor: CHART_COLORS.dangerFill,
+                    borderWidth: 2,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
                 mode: 'index',
                 intersect: false
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true
-            }
-        }
-    };
-    
-    // Merge options
-    const chartOptions = {...defaultOptions, ...options};
-    
-    return new Chart(ctx, {
-        type: 'bar',
-        data: data,
-        options: chartOptions
-    });
-}
-
-// Function to create a heatmap (using Chart.js matrix controller plugin)
-function createHeatmap(elementId, data, options = {}) {
-    const ctx = document.getElementById(elementId).getContext('2d');
-    
-    // Default options for heatmaps
-    const defaultOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'top',
             },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        return `Value: ${context.raw.v}`;
+            stacked: false,
+            plugins: {
+                title: {
+                    display: false,
+                    text: '波动率趋势'
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: '时间'
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: '波动率指数'
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: '波动率偏斜'
                     }
                 }
             }
-        },
-        scales: {
-            x: {
-                type: 'category',
-                labels: data.xLabels,
-                ticks: {
-                    display: true
-                }
-            },
-            y: {
-                type: 'category',
-                labels: data.yLabels,
-                ticks: {
-                    display: true
-                }
-            }
         }
     };
-    
-    // Merge options
-    const chartOptions = {...defaultOptions, ...options};
-    
-    const chartData = {
-        datasets: [{
-            label: options.title || 'Heatmap',
-            data: data.values,
-            backgroundColor: function(context) {
-                const value = context.dataset.data[context.dataIndex].v;
-                const min = data.min || 0;
-                const max = data.max || 1;
-                const normalized = (value - min) / (max - min);
-                
-                // Color scale from green to red
-                const red = Math.round(normalized * 255);
-                const green = Math.round((1 - normalized) * 255);
-                return `rgba(${red}, ${green}, 0, 0.8)`;
-            },
-            borderWidth: 1,
-            borderColor: 'rgba(0, 0, 0, 0.2)',
-            width: ({ chart }) => (chart.chartArea || {}).width / data.xLabels.length - 1,
-            height: ({ chart }) => (chart.chartArea || {}).height / data.yLabels.length - 1
-        }]
-    };
-    
-    return new Chart(ctx, {
-        type: 'matrix',
-        data: chartData,
-        options: chartOptions
-    });
 }
 
-// Function to create a volatility surface chart (3D chart using Chart.js Scatter GL plugin)
-function createVolatilitySurface(elementId, data, options = {}) {
-    // If 3D visualization is needed, we'd implement it here
-    // For now, we'll create a 2D representation using a scatter plot
-    
-    const ctx = document.getElementById(elementId).getContext('2d');
-    
-    // Default options
-    const defaultOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'top',
-            },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        return `Strike: ${context.raw.x}, Expiry: ${context.raw.y}, IV: ${context.raw.z.toFixed(2)}`;
-                    }
-                }
-            }
-        },
-        scales: {
-            x: {
-                title: {
-                    display: true,
-                    text: 'Strike Price'
-                }
-            },
-            y: {
-                title: {
-                    display: true,
-                    text: 'Days to Expiration'
-                }
-            }
-        }
-    };
-    
-    // Merge options
-    const chartOptions = {...defaultOptions, ...options};
-    
-    // Convert data points for scatter plot
-    // data should be an array of {strike, expiry, iv} objects
-    const chartData = {
-        datasets: [{
-            label: 'Implied Volatility Surface',
-            data: data.map(point => ({
-                x: point.strike,
-                y: point.expiry,
-                z: point.iv
-            })),
-            backgroundColor: function(context) {
-                const value = context.raw.z;
-                const min = options.min || 0.1;
-                const max = options.max || 0.5;
-                const normalized = (value - min) / (max - min);
-                
-                // Color scale from blue to red
-                const red = Math.round(normalized * 255);
-                const blue = Math.round((1 - normalized) * 255);
-                return `rgba(${red}, 100, ${blue}, 0.8)`;
-            },
-            pointRadius: 5
-        }]
-    };
-    
-    return new Chart(ctx, {
-        type: 'scatter',
-        data: chartData,
-        options: chartOptions
-    });
-}
-
-// Function to create a gauge chart for risk indicators
-function createGaugeChart(elementId, value, options = {}) {
-    const ctx = document.getElementById(elementId).getContext('2d');
-    
-    // Default thresholds
-    const thresholds = options.thresholds || [0.3, 0.7, 1.0];
-    
-    // Calculate the angle based on the value (0 to 1)
-    const normalizedValue = Math.min(1, Math.max(0, value / thresholds[2]));
-    const angle = normalizedValue * Math.PI;
-    
-    // Colors for different zones
-    const colors = [
-        'rgba(40, 167, 69, 0.8)',  // Green (low risk)
-        'rgba(255, 193, 7, 0.8)',  // Yellow (medium risk)
-        'rgba(220, 53, 69, 0.8)'   // Red (high risk)
-    ];
-    
-    // Determine the color based on thresholds
-    let color;
-    if (value < thresholds[0]) {
-        color = colors[0];
-    } else if (value < thresholds[1]) {
-        color = colors[1];
-    } else {
-        color = colors[2];
-    }
-    
-    // Create the chart
-    return new Chart(ctx, {
-        type: 'doughnut',
+// 获取PCR图表配置
+function getPCRChartConfig(timestamps, pcrValues, priceValues) {
+    return {
+        type: 'line',
         data: {
+            labels: timestamps,
+            datasets: [
+                {
+                    label: '看跌/看涨比率',
+                    data: pcrValues,
+                    borderColor: CHART_COLORS.secondary,
+                    backgroundColor: CHART_COLORS.secondaryFill,
+                    borderWidth: 2,
+                    tension: 0.3,
+                    yAxisID: 'y'
+                },
+                {
+                    label: '价格',
+                    data: priceValues,
+                    borderColor: CHART_COLORS.warning,
+                    backgroundColor: CHART_COLORS.warningFill,
+                    borderWidth: 2,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            stacked: false,
+            plugins: {
+                title: {
+                    display: false,
+                    text: '看跌/看涨比率趋势'
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: '时间'
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: '看跌/看涨比率'
+                    },
+                    suggestedMin: 0.5,
+                    suggestedMax: 1.5
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: '价格'
+                    }
+                }
+            }
+        }
+    };
+}
+
+// 获取希腊字母图表配置
+function getGreeksChartConfig(timestamps, deltaValues, gammaValues, vegaValues) {
+    return {
+        type: 'line',
+        data: {
+            labels: timestamps,
+            datasets: [
+                {
+                    label: 'Delta敞口',
+                    data: deltaValues,
+                    borderColor: CHART_COLORS.secondary,
+                    backgroundColor: CHART_COLORS.secondaryFill,
+                    borderWidth: 2,
+                    tension: 0.3
+                },
+                {
+                    label: 'Gamma敞口',
+                    data: gammaValues,
+                    borderColor: CHART_COLORS.purple,
+                    backgroundColor: CHART_COLORS.purpleFill,
+                    borderWidth: 2,
+                    tension: 0.3
+                },
+                {
+                    label: 'Vega敞口',
+                    data: vegaValues,
+                    borderColor: CHART_COLORS.warning,
+                    backgroundColor: CHART_COLORS.warningFill,
+                    borderWidth: 2,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                title: {
+                    display: false,
+                    text: '希腊字母敞口趋势'
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: '时间'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: '敞口值'
+                    }
+                }
+            }
+        }
+    };
+}
+
+// 获取风险等级图表配置
+function getRiskLevelChartConfig(timestamps, riskValues) {
+    // 将风险等级文本转换为数值
+    const numericRiskValues = riskValues.map(level => {
+        if (level === 'low') return 0;
+        if (level === 'medium') return 1;
+        if (level === 'high') return 2;
+        if (level === 'extreme') return 3;
+        return 1; // 默认中等风险
+    });
+    
+    return {
+        type: 'line',
+        data: {
+            labels: timestamps,
             datasets: [{
-                data: [value, thresholds[2] - value],
-                backgroundColor: [color, 'rgba(0, 0, 0, 0.1)'],
-                borderWidth: 0
+                label: '风险等级',
+                data: numericRiskValues,
+                borderColor: CHART_COLORS.danger,
+                backgroundColor: CHART_COLORS.dangerFill,
+                borderWidth: 2,
+                tension: 0,
+                stepped: true
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            circumference: Math.PI,
-            rotation: Math.PI,
-            cutout: '75%',
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
             plugins: {
-                tooltip: {
-                    enabled: false
-                },
-                legend: {
-                    display: false
-                },
                 title: {
-                    display: true,
-                    text: options.title || 'Risk Level',
-                    position: 'bottom'
+                    display: false,
+                    text: '风险等级趋势'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            let riskText = '';
+                            if (value === 0) riskText = '低风险';
+                            else if (value === 1) riskText = '中等风险';
+                            else if (value === 2) riskText = '高风险';
+                            else if (value === 3) riskText = '极高风险';
+                            return riskText;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: '时间'
+                    }
+                },
+                y: {
+                    min: 0,
+                    max: 3,
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(value) {
+                            if (value === 0) return '低';
+                            if (value === 1) return '中';
+                            if (value === 2) return '高';
+                            if (value === 3) return '极高';
+                            return '';
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: '风险等级'
+                    }
                 }
             }
-        },
-        plugins: [{
-            id: 'gaugeNeedle',
-            afterDatasetDraw(chart) {
-                const {ctx, data, chartArea} = chart;
-                ctx.save();
-                
-                // Draw the value text
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.font = 'bold 24px Arial';
-                ctx.fillStyle = color;
-                ctx.fillText(
-                    value.toFixed(2), 
-                    chartArea.left + chartArea.width / 2, 
-                    chartArea.top + chartArea.height * 0.7
-                );
-                
-                ctx.restore();
-            }
-        }]
+        }
+    };
+}
+
+// 获取交易所PCR比较图表配置
+function getExchangePCRComparisonConfig(exchanges, pcrValues) {
+    // 基于交易所设置颜色
+    const backgroundColors = exchanges.map(exchange => {
+        if (exchange === 'deribit') return CHART_COLORS.primaryFill;
+        if (exchange === 'binance') return CHART_COLORS.warningFill;
+        if (exchange === 'okx') return CHART_COLORS.secondaryFill;
+        return CHART_COLORS.grayFill;
     });
+    
+    const borderColors = exchanges.map(exchange => {
+        if (exchange === 'deribit') return CHART_COLORS.primary;
+        if (exchange === 'binance') return CHART_COLORS.warning;
+        if (exchange === 'okx') return CHART_COLORS.secondary;
+        return CHART_COLORS.gray;
+    });
+    
+    // 格式化交易所名称
+    const formattedExchanges = exchanges.map(e => 
+        e.charAt(0).toUpperCase() + e.slice(1)
+    );
+    
+    return {
+        type: 'bar',
+        data: {
+            labels: formattedExchanges,
+            datasets: [{
+                label: '看跌/看涨比率',
+                data: pcrValues,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: false,
+                    text: '交易所看跌/看涨比率比较'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            let sentiment = '中性';
+                            
+                            if (value > 1.2) sentiment = '偏空';
+                            else if (value < 0.8) sentiment = '偏多';
+                            
+                            return `PCR: ${value.toFixed(2)} (${sentiment})`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: '比率值'
+                    }
+                }
+            }
+        }
+    };
+}
+
+// 获取成交量分布图表配置
+function getVolumeDistributionConfig(callVolume, putVolume) {
+    return {
+        type: 'doughnut',
+        data: {
+            labels: ['看涨期权成交量', '看跌期权成交量'],
+            datasets: [{
+                data: [callVolume, putVolume],
+                backgroundColor: [
+                    CHART_COLORS.primaryFill,
+                    CHART_COLORS.dangerFill
+                ],
+                borderColor: [
+                    CHART_COLORS.primary,
+                    CHART_COLORS.danger
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = callVolume + putVolume;
+                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    };
+}
+
+// 错误处理函数
+function handleChartError(chartContainer, errorMessage) {
+    console.error(`图表加载错误: ${errorMessage}`);
+    
+    // 显示错误信息
+    const errorHtml = `
+        <div class="chart-error text-center p-3">
+            <i class="fas fa-exclamation-triangle text-warning mb-2" style="font-size: 2rem;"></i>
+            <p class="text-muted">${errorMessage || '加载图表时出现错误，请稍后再试。'}</p>
+        </div>
+    `;
+    
+    // 替换图表容器内容
+    chartContainer.innerHTML = errorHtml;
 }
