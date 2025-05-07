@@ -41,16 +41,13 @@ class RiskIndicator(db.Model):
     time_period = db.Column(db.String(10), default='1h', nullable=False, index=True)  # 时间周期: '15m', '1h', '4h', '1d', '7d'
     
     # 核心风险指标
-    volatility_index = db.Column(db.Float, nullable=True)  # 波动率指数
+    volaxivity = db.Column(db.Float, nullable=True)  # 波动率指数 (旧命名)
     volatility_skew = db.Column(db.Float, nullable=True)  # 波动率偏斜
     put_call_ratio = db.Column(db.Float, nullable=True)  # 看跌/看涨比率
     market_sentiment = db.Column(db.String(20), nullable=True)  # 市场情绪: 'bullish', 'bearish', 'neutral'
     
-    # 期权头寸风险
-    delta_exposure = db.Column(db.Float, nullable=True)  # Delta敞口
-    gamma_exposure = db.Column(db.Float, nullable=True)  # Gamma敞口
-    vega_exposure = db.Column(db.Float, nullable=True)  # Vega敞口
-    theta_exposure = db.Column(db.Float, nullable=True)  # Theta敞口
+    # 金融反身性指标
+    reflexivity_indicator = db.Column(db.Float, nullable=True)  # 反身性指标
     
     # 加密货币特有指标
     funding_rate = db.Column(db.Float, nullable=True)  # 资金费率

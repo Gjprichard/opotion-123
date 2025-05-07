@@ -133,7 +133,7 @@ class RiskService:
         # 如果数据为空，返回空的指标集
         if df.empty:
             return {
-                'volatility_index': 0.0,
+                'volaxivity': 0.0,
                 'volatility_skew': 0.0,
                 'put_call_ratio': 1.0,
                 'market_sentiment': 'neutral',
@@ -149,7 +149,7 @@ class RiskService:
         # 计算波动率指数 (Volaxivity) - 结合当前隐含波动率(70%)和波动率变化率(30%)
         current_iv = df['implied_volatility'].mean()
         iv_change = self._calculate_iv_change(symbol, time_period, current_iv)
-        volatility_index = (current_iv * 0.7) + (abs(iv_change) * 0.3)
+        volaxivity = (current_iv * 0.7) + (abs(iv_change) * 0.3)
         
         # 计算波动率偏斜 - 看跌期权与看涨期权隐含波动率的差异
         call_iv = df[df['option_type'] == 'call']['implied_volatility'].mean()
@@ -172,16 +172,16 @@ class RiskService:
         
         # 模拟资金费率和清算风险（实际中应从交易所API获取）
         funding_rate = 0.01  # 假设值，实际应从交易所获取
-        liquidation_risk = self._calculate_liquidation_risk(delta_exposure, volatility_index)
+        liquidation_risk = self._calculate_liquidation_risk(delta_exposure, volaxivity)
         
         # 计算整体风险级别
         risk_level = self._determine_risk_level(
-            volatility_index, volatility_skew, put_call_ratio, 
+            volaxivity, volatility_skew, put_call_ratio, 
             delta_exposure, gamma_exposure, vega_exposure
         )
         
         return {
-            'volatility_index': float(volatility_index),
+            'volaxivity': float(volaxivity),
             'volatility_skew': float(volatility_skew),
             'put_call_ratio': float(put_call_ratio),
             'market_sentiment': market_sentiment,
@@ -219,8 +219,8 @@ class RiskService:
                 RiskIndicator.timestamp <= to_time
             ).order_by(desc(RiskIndicator.timestamp)).first()
             
-            if previous_indicator and previous_indicator.volatility_index:
-                return (current_iv - previous_indicator.volatility_index) / previous_indicator.volatility_index
+            if previous_indicator and previous_indicator.volaxivity:
+                return (current_iv - previous_indicator.volaxivity) / previous_indicator.volaxivity
             
             return 0.0
         
@@ -393,14 +393,11 @@ class RiskService:
         return RiskIndicator(
             symbol=symbol,
             time_period=time_period,
-            volatility_index=0.0,
+            volaxivity=0.0,
             volatility_skew=0.0,
             put_call_ratio=1.0,
             market_sentiment='neutral',
-            delta_exposure=0.0,
-            gamma_exposure=0.0,
-            vega_exposure=0.0,
-            theta_exposure=0.0,
+            reflexivity_indicator=0.0,
             funding_rate=0.01,
             liquidation_risk=0.5,
             risk_level='medium'
@@ -413,7 +410,7 @@ class RiskService:
             'symbol': indicator.symbol,
             'timestamp': indicator.timestamp.isoformat() if indicator.timestamp else None,
             'time_period': indicator.time_period,
-            'volatility_index': indicator.volatility_index,
+            'volaxivity': indicator.volaxivity,
             'volatility_skew': indicator.volatility_skew,
             'put_call_ratio': indicator.put_call_ratio,
             'market_sentiment': indicator.market_sentiment,
