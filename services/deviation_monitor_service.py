@@ -12,6 +12,55 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+class DeviationMonitorService:
+    """
+    期权执行价偏离监控服务类
+    负责监控和分析期权执行价与市场价的偏离情况
+    """
+    
+    def __init__(self):
+        """初始化偏离监控服务"""
+        logger.info("DeviationMonitorService initialized")
+    
+    def calculate_deviation_metrics(self, symbol, time_periods=None):
+        """封装原有的calculate_deviation_metrics函数"""
+        return calculate_deviation_metrics(symbol, time_periods)
+    
+    def get_deviation_data(self, symbol, time_period='15m', is_anomaly=None, days=7, exchange='deribit', option_type=None, volume_change_filter=None):
+        """封装原有的get_deviation_data函数"""
+        return get_deviation_data(
+            symbol=symbol,
+            time_period=time_period,
+            is_anomaly=is_anomaly,
+            days=days,
+            exchange=exchange,
+            option_type=option_type,
+            volume_change_filter=volume_change_filter
+        )
+    
+    def get_deviation_alerts(self, symbol, time_period='15m', exchange='deribit', option_type=None, acknowledged=None):
+        """封装原有的get_deviation_alerts函数"""
+        return get_deviation_alerts(
+            symbol=symbol,
+            time_period=time_period,
+            exchange=exchange,
+            option_type=option_type,
+            acknowledged=acknowledged
+        )
+    
+    def acknowledge_alert(self, alert_id):
+        """封装原有的acknowledge_deviation_alert函数"""
+        return acknowledge_deviation_alert(alert_id)
+    
+    def get_call_put_volume_analysis(self, symbol, time_period='15m', days=7, include_history=True):
+        """封装原有的get_call_put_volume_analysis函数"""
+        return get_call_put_volume_analysis(
+            symbol=symbol,
+            time_period=time_period,
+            days=days,
+            include_history=include_history
+        )
+
 def calculate_deviation_metrics(symbol, time_periods=None):
     """
     计算期权执行价偏离指标

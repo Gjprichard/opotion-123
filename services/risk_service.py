@@ -114,8 +114,7 @@ class RiskService:
             'reflexivity_indicator': indicator.reflexivity_indicator,
             'funding_rate': indicator.funding_rate,
             'liquidation_risk': indicator.liquidation_risk,
-            'current_price': price,
-            'risk_level': indicator.risk_level
+            'current_price': price
         }
 
 def calculate_risk_indicators(symbol, time_periods=None):

@@ -1,10 +1,17 @@
 from app import app, db
-import routes  # noqa: F401
-from services.data_service import fetch_latest_option_data
-from services.risk_calculator import calculate_risk_indicators
-from services.deviation_monitor_service import calculate_deviation_metrics
+from services.data_service import DataService
+from services.risk_service import RiskService
+from services.deviation_monitor_service import DeviationMonitorService
 from config import Config
 import logging
+
+# Create service instances for initialization
+data_service = DataService()
+risk_service = RiskService()
+deviation_service = DeviationMonitorService()
+
+# Import routes after service initialization to avoid circular imports
+import routes  # noqa: F401
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -20,13 +27,13 @@ def initialize_database():
             logger.info(f"Initializing data for {symbol} from real exchange APIs...")
             
             # Fetch latest option data for the symbol
-            success = fetch_latest_option_data(symbol)
+            success = data_service.fetch_and_store_option_data(symbol)
             
             if success:
                 # Calculate risk indicators based on the new data
-                calculate_risk_indicators(symbol)
+                risk_service.calculate_risk_indicators(symbol)
                 # 计算期权执行价偏离指标
-                calculate_deviation_metrics(symbol)
+                deviation_service.calculate_deviation_metrics(symbol)
                 logger.info(f"Successfully initialized data for {symbol}")
             else:
                 logger.error(f"Failed to initialize data for {symbol} - please check API connections")

@@ -5,10 +5,8 @@ from sqlalchemy import func
 from app import app, db
 from models import OptionData, RiskIndicator, Alert, AlertThreshold, ScenarioAnalysis, StrikeDeviationMonitor, DeviationAlert, ApiCredential, SystemSetting
 from config import Config
-from services.data_service import fetch_latest_option_data, fetch_historical_data
-from services.risk_calculator import calculate_risk_indicators, run_scenario_analysis
+from main import data_service, risk_service, deviation_service
 from services.alert_service import get_active_alerts, acknowledge_alert, update_alert_threshold
-from services.deviation_monitor_service import calculate_deviation_metrics, get_deviation_data, get_deviation_alerts, acknowledge_deviation_alert
 from services.exchange_api_ccxt import set_api_credentials, get_underlying_price, test_connection
 from translations import translations
 
@@ -70,22 +68,29 @@ def dashboard_data():
         
         app.logger.info(f"Fetching dashboard data for symbol={symbol}, days={days}, time_period={time_period}")
         
-        # 获取过去N天的风险指标数据
-        from_date = datetime.utcnow() - timedelta(days=days)
-        risk_data = RiskIndicator.query.filter(
-            RiskIndicator.symbol == symbol,
-            RiskIndicator.timestamp > from_date,
-            RiskIndicator.time_period == time_period
-        ).order_by(RiskIndicator.timestamp).all()
+        # 使用RiskService获取历史风险指标
+        risk_indicators = risk_service.get_historical_risk_indicators(symbol, time_period, days)
         
-        app.logger.info(f"Found {len(risk_data)} risk indicator records for {symbol} ({time_period})")
+        app.logger.info(f"Found {len(risk_indicators)} risk indicator records for {symbol} ({time_period})")
         
-        # 格式化数据用于chart.js
-        timestamps = [r.timestamp.strftime('%Y-%m-%d %H:%M') for r in risk_data]
-        volaxivity = [float(r.volaxivity) if r.volaxivity is not None else None for r in risk_data]
-        volatility_skew = [float(r.volatility_skew) if r.volatility_skew is not None else None for r in risk_data]
-        put_call_ratio = [float(r.put_call_ratio) if r.put_call_ratio is not None else None for r in risk_data]
-        reflexivity = [float(r.reflexivity_indicator) if r.reflexivity_indicator is not None else None for r in risk_data]
+        if not risk_indicators:
+            # 如果没有找到数据，返回空结果
+            return jsonify({
+                'timestamps': [],
+                'volaxivity': [],
+                'volatility_skew': [],
+                'put_call_ratio': [],
+                'reflexivity_indicator': [],
+                'thresholds': {},
+                'time_period': time_period
+            })
+        
+        # 从风险指标字典提取数据
+        timestamps = [r.get('timestamp', '') for r in risk_indicators]
+        volaxivity = [r.get('volaxivity', None) for r in risk_indicators]
+        volatility_skew = [r.get('volatility_skew', None) for r in risk_indicators]
+        put_call_ratio = [r.get('put_call_ratio', None) for r in risk_indicators]
+        reflexivity = [r.get('reflexivity_indicator', None) for r in risk_indicators]
         
         # 获取当前时间周期的阈值设置
         thresholds = {}
@@ -268,8 +273,8 @@ def run_scenario():
         if field not in scenario_data:
             return jsonify({'success': False, 'message': f'Missing required field: {field}'}), 400
     
-    # Run the scenario analysis
-    result = run_scenario_analysis(
+    # Run the scenario analysis using risk_service
+    result = risk_service.run_scenario_analysis(
         scenario_data['name'],
         scenario_data['symbol'],
         float(scenario_data['price_change']),
@@ -345,12 +350,12 @@ def refresh_data():
     if not symbol:
         return jsonify({'success': False, 'message': 'Symbol is required'}), 400
     
-    # Fetch latest data
-    success = fetch_latest_option_data(symbol)
+    # 使用DataService获取最新数据
+    success = data_service.fetch_and_store_option_data(symbol)
     
     if success:
-        # Calculate risk indicators based on new data
-        calculate_risk_indicators(symbol)
+        # 使用RiskService计算风险指标
+        risk_result = risk_service.calculate_risk_indicators(symbol)
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'message': 'Error fetching option data'}), 500
@@ -371,7 +376,7 @@ def deviation_monitor():
         time_period = '15m'
     
     # 获取偏离数据 - 现在返回包含统计信息的字典
-    deviation_data = get_deviation_data(
+    deviation_data = deviation_service.get_deviation_data(
         symbol=symbol,
         time_period=time_period,
         is_anomaly=True if anomaly_only else None,
@@ -386,7 +391,7 @@ def deviation_monitor():
     statistics = deviation_data.get('statistics', {})
     
     # 获取未确认的偏离警报
-    active_alerts = get_deviation_alerts(
+    active_alerts = deviation_service.get_deviation_alerts(
         symbol=symbol,
         exchange=exchange,
         time_period=time_period,
@@ -433,8 +438,8 @@ def deviation_data_api():
         if time_period not in Config.TIME_PERIODS:
             time_period = '15m'
         
-        # 获取偏离数据和统计信息
-        deviation_data = get_deviation_data(
+        # 使用DeviationMonitorService获取偏离数据和统计信息
+        deviation_data = deviation_service.get_deviation_data(
             symbol=symbol,
             time_period=time_period,
             is_anomaly=True if anomaly_only else None,
@@ -505,8 +510,8 @@ def deviation_alerts_api():
         if time_period not in Config.TIME_PERIODS:
             time_period = '15m'
         
-        # 获取偏离警报
-        alerts = get_deviation_alerts(
+        # 使用DeviationMonitorService获取偏离警报
+        alerts = deviation_service.get_deviation_alerts(
             symbol=symbol,
             time_period=time_period,
             exchange=exchange,
@@ -551,7 +556,8 @@ def acknowledge_deviation_alert_api():
     if not alert_id:
         return jsonify({'success': False, 'message': 'Alert ID is required'}), 400
     
-    success = acknowledge_deviation_alert(alert_id)
+    # 使用DeviationMonitorService确认警报
+    success = deviation_service.acknowledge_alert(alert_id)
     
     if success:
         return jsonify({'success': True})
@@ -580,11 +586,8 @@ def deviation_volume_analysis_api():
             app.logger.info(f"请求天数 {days} 超过最大历史天数 {max_history_days}，将限制为 {max_history_days}")
             days = max_history_days
         
-        # 从deviation_monitor_service中导入所需的函数
-        from services.deviation_monitor_service import get_call_put_volume_analysis
-        
-        # 获取成交量分析数据
-        volume_data = get_call_put_volume_analysis(
+        # 使用DeviationMonitorService获取成交量分析数据
+        volume_data = deviation_service.get_call_put_volume_analysis(
             symbol=symbol,
             time_period=time_period,
             days=days,
