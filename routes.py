@@ -74,13 +74,10 @@ def dashboard_data():
                     }
         except Exception as ex:
             logger.warning(f"获取交易所比较数据时出错: {str(ex)}")
-            # 在出错时提供默认数据，确保不影响整体功能
+            # 如果无法获取交易所数据，只返回空对象而不使用模拟数据
             if not exchange_data:
-                exchange_data = {
-                    'deribit': {'call_volume': 1000, 'put_volume': 1200, 'ratio': 1.2},
-                    'binance': {'call_volume': 800, 'put_volume': 700, 'ratio': 0.88},
-                    'okx': {'call_volume': 600, 'put_volume': 660, 'ratio': 1.1}
-                }
+                logger.warning("无法获取交易所数据，返回空对象")
+                exchange_data = {}
         
         # 获取最新警报
         alerts = []  # TODO: 从alert_service获取警报数据

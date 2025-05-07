@@ -450,10 +450,45 @@ class RiskService:
             'risk_level': indicator.risk_level if hasattr(indicator, 'risk_level') else 'medium'
         }
         
-        # 添加用于前端显示的虚拟字段
-        result['price'] = 65000.0  # 示例价格，实际中应从数据库或API获取
-        result['price_change'] = 1.2  # 示例价格变化率
-        result['total_volume'] = 10000  # 示例成交量
+        # 添加用于前端显示的价格字段，应从API获取真实数据
+        try:
+            # 从交易所API获取最新价格
+            from services.exchange_api import ExchangeAPI
+            exchange_api = ExchangeAPI()
+            if indicator.symbol == 'BTC':
+                price = exchange_api.get_underlying_price('deribit', 'BTC-USD')
+                prev_price = exchange_api.get_underlying_price('deribit', 'BTC-USD', '1d')
+            elif indicator.symbol == 'ETH':
+                price = exchange_api.get_underlying_price('deribit', 'ETH-USD')
+                prev_price = exchange_api.get_underlying_price('deribit', 'ETH-USD', '1d')
+            else:
+                price = 0
+                prev_price = 0
+                
+            result['price'] = price or 0
+            result['price_change'] = ((price - prev_price) / prev_price * 100) if prev_price and price else 0
+            
+            # 从数据库获取成交量数据
+            from models import OptionData
+            from sqlalchemy import func, and_
+            from datetime import datetime, timedelta
+            
+            # 计算24小时内的总成交量
+            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            volume_sum = db.session.query(func.sum(OptionData.volume)).filter(
+                and_(
+                    OptionData.symbol == indicator.symbol,
+                    OptionData.timestamp >= cutoff_time
+                )
+            ).scalar() or 0
+            
+            result['total_volume'] = volume_sum
+        except Exception as e:
+            logger.error(f"获取真实价格和成交量数据时出错: {str(e)}")
+            # 发生错误时不提供数据，而不是使用模拟数据
+            result['price'] = 0
+            result['price_change'] = 0
+            result['total_volume'] = 0
         
         return result
     

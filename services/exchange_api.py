@@ -183,8 +183,18 @@ class ExchangeAPI:
             logger.error(f"获取 {exchange_id} 的 {symbol} 期权数据时出错: {str(e)}")
             return []
     
-    def get_underlying_price(self, exchange_id: str, symbol: str) -> Optional[float]:
-        """获取特定交易所的标的资产价格"""
+    def get_underlying_price(self, exchange_id: str, symbol: str, timeframe: str = None) -> Optional[float]:
+        """
+        获取特定交易所的标的资产价格
+        
+        Args:
+            exchange_id: 交易所ID
+            symbol: 交易对符号
+            timeframe: 时间段，例如 '1d' 表示获取1天前的收盘价
+            
+        Returns:
+            标的资产价格
+        """
         try:
             if exchange_id not in self.exchanges:
                 logger.warning(f"不支持的交易所: {exchange_id}")
@@ -192,6 +202,45 @@ class ExchangeAPI:
             
             exchange = self.exchanges[exchange_id]
             
+            # 如果指定了timeframe，获取历史K线数据
+            if timeframe:
+                # 转换timeframe为CCXT支持的格式
+                limit = 2  # 获取2条数据确保有足够数据
+                
+                # 根据交易所格式化交易对
+                if exchange_id == 'deribit':
+                    market_symbol = f"{symbol}-PERPETUAL"
+                elif exchange_id == 'okx':
+                    market_symbol = f"{symbol}-USDT-SWAP"
+                elif exchange_id == 'binance':
+                    market_symbol = f"{symbol}/USDT"
+                else:
+                    return None
+                
+                # 计算时间段
+                now = datetime.utcnow()
+                if timeframe == '1d':
+                    since = int((now - timedelta(days=1)).timestamp() * 1000)
+                    ccxt_timeframe = '1d'
+                elif timeframe == '1h':
+                    since = int((now - timedelta(hours=1)).timestamp() * 1000)
+                    ccxt_timeframe = '1h'
+                else:
+                    since = int((now - timedelta(days=1)).timestamp() * 1000)
+                    ccxt_timeframe = '1d'
+                
+                # 获取历史K线数据
+                try:
+                    ohlcv = exchange.fetch_ohlcv(market_symbol, ccxt_timeframe, since, limit)
+                    if ohlcv and len(ohlcv) > 0:
+                        # 返回第一条记录的收盘价 (OHLCV中第4个元素是收盘价)
+                        return float(ohlcv[0][4])
+                except Exception as e:
+                    logger.warning(f"获取 {exchange_id} 的 {symbol} 历史价格时出错: {str(e)}")
+                    # 回退到获取当前价格
+                    pass
+            
+            # 获取当前价格
             # 根据交易所格式化交易对
             if exchange_id == 'deribit':
                 ticker = exchange.fetch_ticker(f"{symbol}-PERPETUAL")
