@@ -2,37 +2,30 @@ import logging
 import numpy as np
 import pandas as pd
 import random
-import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from functools import lru_cache
 from services.exchange_api import get_option_market_data, get_underlying_price
 from app import db
 from models import OptionData
 from config import Config
-from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
 class DataService:
     """数据服务类，负责处理期权数据的获取、存储和检索"""
-
+    
     def __init__(self):
         """初始化数据服务"""
-        self.logger = logging.getLogger(__name__)
-        self.cache = {}
-        self.cache_ttl = 300  # 缓存有效期(秒)
-        self.cache_timestamps = {}
         logger.info("DataService initialized")
-
+        
     def fetch_and_store_option_data(self, symbol: str, days_range: int = 7) -> int:
         """
         从交易所获取期权数据并存储到数据库
-
+        
         Args:
             symbol: 标的资产符号 (BTC或ETH)
             days_range: 获取未来多少天内到期的合约
-
+            
         Returns:
             存储的期权数据数量
         """
@@ -41,152 +34,94 @@ class DataService:
         if result:
             return 1  # 成功返回正数
         return 0
-
+    
     def cleanup_old_data(self, days: int = 30) -> int:
         """
         清理旧数据
-
+        
         Args:
             days: 保留最近几天的数据
-
+            
         Returns:
             删除的记录数量
         """
         # 调用老函数
         return cleanup_old_data()
-
-    def _get_cache_key(self, method_name, *args, **kwargs):
-        """生成缓存键"""
-        return f"{method_name}:{':'.join(str(arg) for arg in args)}:{':'.join(f'{k}={v}' for k, v in kwargs.items())}"
-
-    def _get_from_cache(self, cache_key):
-        """从缓存获取数据"""
-        if cache_key in self.cache:
-            # 检查缓存是否过期
-            timestamp = self.cache_timestamps.get(cache_key, 0)
-            if time.time() - timestamp < self.cache_ttl:
-                self.logger.debug(f"Cache hit for {cache_key}")
-                return self.cache[cache_key]
-            else:
-                # 清理过期缓存
-                self.logger.debug(f"Cache expired for {cache_key}")
-                del self.cache[cache_key]
-                if cache_key in self.cache_timestamps:
-                    del self.cache_timestamps[cache_key]
-        return None
-
-    def _set_cache(self, cache_key, data):
-        """设置缓存"""
-        self.cache[cache_key] = data
-        self.cache_timestamps[cache_key] = time.time()
-        self.logger.debug(f"Cache set for {cache_key}")
-
-    def clear_cache(self):
-        """清除所有缓存"""
-        self.cache.clear()
-        self.cache_timestamps.clear()
-        self.logger.info("Data service cache cleared")
-
+    
     def get_latest_option_data(self, symbol: str, exchange: Optional[str] = None,
-                              expiration_date: Optional[date] = None,
-                              option_type: Optional[str] = None) -> List[OptionData]:
+                              option_type: Optional[str] = None, days: int = 7) -> List[Dict[str, Any]]:
         """
-        获取最新的期权数据，支持缓存
-
+        获取最新的期权数据
+        
         Args:
             symbol: 标的资产符号
             exchange: 可选，指定交易所
-            expiration_date: 可选，指定到期日
             option_type: 可选，期权类型 ('call' 或 'put')
-
+            days: 获取最近几天的数据
+            
         Returns:
             期权数据列表
         """
-        try:
-            # 生成缓存键
-            cache_key = self._get_cache_key('get_latest_option_data', symbol, 
-                                           exchange=exchange, 
-                                           expiration_date=expiration_date, 
-                                           option_type=option_type)
-
-            # 尝试从缓存获取
-            cached_data = self._get_from_cache(cache_key)
-            if cached_data is not None:
-                return cached_data
-
-            # 缓存未命中，从数据库获取
-            from_date = datetime.utcnow() - timedelta(days=7)
-
-            # 构建查询
-            query = OptionData.query.filter(
-                OptionData.symbol == symbol,
-                OptionData.timestamp > from_date
-            )
-
-            if exchange:
-                query = query.filter(OptionData.exchange == exchange)
-
-            if expiration_date:
-                query = query.filter(OptionData.expiration_date == expiration_date)
-
-            if option_type:
-                query = query.filter(OptionData.option_type == option_type)
-
-            records = query.order_by(OptionData.timestamp.desc()).all()
-
-            # 转换为字典列表
-            result = [self._option_data_to_dict(option) for option in records]
-
-            # 存入缓存
-            self._set_cache(cache_key, result)
-
-            return result
-
-        except Exception as e:
-            self.logger.error(f"Error getting latest option data: {str(e)}")
-            return []
-
+        from_date = datetime.utcnow() - timedelta(days=days)
+        
+        # 构建查询
+        query = OptionData.query.filter(
+            OptionData.symbol == symbol,
+            OptionData.timestamp > from_date
+        )
+        
+        if exchange:
+            query = query.filter(OptionData.exchange == exchange)
+            
+        if option_type:
+            query = query.filter(OptionData.option_type == option_type)
+            
+        records = query.order_by(OptionData.timestamp.desc()).all()
+        
+        # 转换为字典列表
+        return [self._option_data_to_dict(option) for option in records]
+    
     def get_put_call_ratio(self, symbol: str, exchange: Optional[str] = None,
                           days: int = 1) -> Dict[str, Any]:
         """
         计算看跌/看涨比率
-
+        
         Args:
             symbol: 标的资产符号
             exchange: 可选，指定交易所
             days: 计算最近几天的数据
-
+            
         Returns:
             包含看跌/看涨比率和相关数据的字典
         """
         from_date = datetime.utcnow() - timedelta(days=days)
-
+        
         # 构建基本查询
         base_query = OptionData.query.filter(
             OptionData.symbol == symbol,
             OptionData.timestamp > from_date
         )
-
+        
         if exchange:
             base_query = base_query.filter(OptionData.exchange == exchange)
-
+        
         # 获取看跌期权
         put_volume = base_query.filter(
             OptionData.option_type == 'put'
         ).with_entities(
             db.func.sum(OptionData.volume)
         ).scalar() or 0
-
+        
         # 获取看涨期权
         call_volume = base_query.filter(
             OptionData.option_type == 'call'
         ).with_entities(
             db.func.sum(OptionData.volume)
         ).scalar() or 0
-
+        
         # 计算比率
         ratio = put_volume / call_volume if call_volume > 0 else 0
-
+        
         return {
             'symbol': symbol,
             'put_volume': put_volume,
@@ -194,7 +129,7 @@ class DataService:
             'ratio': ratio,
             'period': f'{days} days'
         }
-
+        
     def _option_data_to_dict(self, option: OptionData) -> Dict[str, Any]:
         """将OptionData对象转换为字典"""
         return {
@@ -215,7 +150,7 @@ class DataService:
             'theta': option.theta,
             'vega': option.vega
         }
-
+        
 # 保留原始函数以保持兼容性
 def fetch_latest_option_data(symbol):
     """
@@ -261,7 +196,7 @@ def fetch_latest_option_data(symbol):
             try:
                 # 直接获取数据，不使用超时控制
                 result = get_option_market_data(symbol, exchange_id)
-
+                
                 if result:
                     logger.info(f"Received {len(result)} option contracts for {symbol} from {exchange_id}")
                     all_option_data.extend(result)

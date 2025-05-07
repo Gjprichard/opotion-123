@@ -6,8 +6,8 @@ class OptionData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     symbol = db.Column(db.String(20), nullable=False, index=True)
     expiration_date = db.Column(db.Date, nullable=False, index=True)
-    strike_price = db.Column(db.Float, nullable=False, index=True)
-    option_type = db.Column(db.String(4), nullable=False, index=True)  # 'call' or 'put'
+    strike_price = db.Column(db.Float, nullable=False)
+    option_type = db.Column(db.String(4), nullable=False)  # 'call' or 'put'
     underlying_price = db.Column(db.Float, nullable=False)
     option_price = db.Column(db.Float, nullable=False)
     volume = db.Column(db.Integer, nullable=True)
@@ -19,13 +19,6 @@ class OptionData(db.Model):
     vega = db.Column(db.Float, nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     exchange = db.Column(db.String(20), default='deribit', nullable=False, index=True)  # 'deribit', 'binance', 'okx'
-    
-    # 添加复合索引以加速常用查询
-    __table_args__ = (
-        db.Index('idx_option_symbol_timestamp', 'symbol', 'timestamp'),
-        db.Index('idx_option_symbol_type_timestamp', 'symbol', 'option_type', 'timestamp'),
-        db.Index('idx_option_exchange_timestamp', 'exchange', 'timestamp'),
-    )
 
     def __repr__(self):
         return f'<OptionData {self.symbol} {self.option_type} {self.strike_price} {self.expiration_date} {self.exchange}>'
