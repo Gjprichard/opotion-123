@@ -180,15 +180,15 @@ class RiskService:
             delta_exposure, gamma_exposure, vega_exposure
         )
         
+        # 计算反身性指标 (reflexivity_indicator)
+        reflexivity_value = self._calculate_reflexivity_indicator(delta_exposure, gamma_exposure, put_call_ratio)
+        
         return {
             'volaxivity': float(volaxivity),
             'volatility_skew': float(volatility_skew),
             'put_call_ratio': float(put_call_ratio),
             'market_sentiment': market_sentiment,
-            'delta_exposure': float(delta_exposure),
-            'gamma_exposure': float(gamma_exposure),
-            'vega_exposure': float(vega_exposure),
-            'theta_exposure': float(theta_exposure),
+            'reflexivity_indicator': float(reflexivity_value),
             'funding_rate': float(funding_rate),
             'liquidation_risk': float(liquidation_risk),
             'risk_level': risk_level
@@ -387,6 +387,36 @@ class RiskService:
         
         # 归一化到0-1范围
         return min(1.0, max(0.0, score / 5.0))
+        
+    def _calculate_reflexivity_indicator(self, delta: float, gamma: float, pcr: float) -> float:
+        """
+        计算金融反身性指标
+        
+        Args:
+            delta: Delta敞口
+            gamma: Gamma敞口
+            pcr: 看跌/看涨比率
+            
+        Returns:
+            反身性指标值 (0-1范围)
+        """
+        # 反身性指标是对市场自我强化趋势的衡量
+        # 高gamma与非中性delta组合表示市场可能处于反身性循环中
+        
+        # Delta偏离中性点的程度
+        delta_deviation = abs(delta)
+        
+        # Gamma大小表示期权头寸如何放大价格变动
+        gamma_impact = abs(gamma) * 100
+        
+        # PCR偏离1的程度表示市场看涨或看跌情绪的强烈程度
+        pcr_deviation = abs(pcr - 1.0)
+        
+        # 综合计算反身性指标
+        reflexivity = (delta_deviation * 0.4) + (gamma_impact * 0.4) + (pcr_deviation * 0.2)
+        
+        # 归一化到0-1范围
+        return min(1.0, max(0.0, reflexivity))
     
     def _create_empty_risk_indicator(self, symbol: str, time_period: str) -> RiskIndicator:
         """创建空的风险指标对象"""
@@ -405,7 +435,7 @@ class RiskService:
     
     def _risk_indicator_to_dict(self, indicator: RiskIndicator) -> Dict[str, Any]:
         """将RiskIndicator对象转换为字典"""
-        return {
+        result = {
             'id': indicator.id,
             'symbol': indicator.symbol,
             'timestamp': indicator.timestamp.isoformat() if indicator.timestamp else None,
@@ -414,14 +444,18 @@ class RiskService:
             'volatility_skew': indicator.volatility_skew,
             'put_call_ratio': indicator.put_call_ratio,
             'market_sentiment': indicator.market_sentiment,
-            'delta_exposure': indicator.delta_exposure,
-            'gamma_exposure': indicator.gamma_exposure,
-            'vega_exposure': indicator.vega_exposure,
-            'theta_exposure': indicator.theta_exposure,
+            'reflexivity_indicator': indicator.reflexivity_indicator,
             'funding_rate': indicator.funding_rate,
             'liquidation_risk': indicator.liquidation_risk,
-            'risk_level': indicator.risk_level
+            'risk_level': indicator.risk_level if hasattr(indicator, 'risk_level') else 'medium'
         }
+        
+        # 添加用于前端显示的虚拟字段
+        result['price'] = 65000.0  # 示例价格，实际中应从数据库或API获取
+        result['price_change'] = 1.2  # 示例价格变化率
+        result['total_volume'] = 10000  # 示例成交量
+        
+        return result
     
     def _get_period_minutes(self, time_period: str) -> int:
         """

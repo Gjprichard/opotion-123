@@ -1,153 +1,268 @@
 {% extends 'layout.html' %}
 
 {% block content %}
-<div class="row">
-    <!-- 筛选器 -->
-    <div class="col-md-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title">筛选器</h5>
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>期权风险仪表盘</h2>
+        <p class="text-muted">实时监控加密货币期权市场风险指标和多空情绪</p>
+    </div>
+    <div class="col-md-4">
+        <div class="d-flex justify-content-end align-items-center h-100">
+            <div class="me-2">
+                <select id="symbol-selector" class="form-select form-select-sm">
+                    {% for symbol in symbols %}
+                    <option value="{{ symbol }}" {% if symbol == default_symbol %}selected{% endif %}>{{ symbol }}</option>
+                    {% endfor %}
+                </select>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <label for="symbol-select" class="form-label">资产</label>
-                        <select class="form-select" id="symbol-select">
-                            {% for symbol in symbols %}
-                            <option value="{{ symbol }}" {% if symbol == default_symbol %}selected{% endif %}>{{ symbol }}</option>
-                            {% endfor %}
-                        </select>
+            <div>
+                <select id="time-period-selector" class="form-select form-select-sm">
+                    {% for period in time_periods %}
+                    <option value="{{ period }}" {% if period == default_time_period %}selected{% endif %}>
+                        {% if period == '15m' %}15分钟
+                        {% elif period == '1h' %}1小时
+                        {% elif period == '4h' %}4小时
+                        {% elif period == '1d' %}1天
+                        {% elif period == '7d' %}7天
+                        {% elif period == '30d' %}30天
+                        {% else %}{{ period }}
+                        {% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button id="refresh-btn" class="btn btn-sm btn-outline-primary ms-2">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="dashboard-container">
+    <!-- 概览卡片 -->
+    <div class="row mb-4">
+        <!-- 市场概览 -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-line me-2"></i>市场概览
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <div>
+                            <span class="d-block text-muted small">当前价格</span>
+                            <h3 id="current-price">--</h3>
+                        </div>
+                        <div class="text-end">
+                            <span class="d-block text-muted small">24小时变化</span>
+                            <h5 id="price-change">--</h5>
+                        </div>
                     </div>
-                    <div class="col-md-3">
-                        <label for="time-period-select" class="form-label">时间周期</label>
-                        <select class="form-select" id="time-period-select">
-                            {% for period in time_periods %}
-                            <option value="{{ period }}" {% if period == default_time_period %}selected{% endif %}>{{ period }}</option>
-                            {% endfor %}
-                        </select>
+                    
+                    <div class="d-flex justify-content-between mb-3">
+                        <div>
+                            <span class="d-block text-muted small">市场情绪</span>
+                            <h5 id="market-sentiment">--</h5>
+                        </div>
+                        <div class="text-end">
+                            <span class="d-block text-muted small">看跌/看涨比率</span>
+                            <h5 id="pcr-value">--</h5>
+                        </div>
                     </div>
-                    <div class="col-md-3">
-                        <label for="days-select" class="form-label">历史数据天数</label>
-                        <select class="form-select" id="days-select">
-                            <option value="7">7天</option>
-                            <option value="14">14天</option>
-                            <option value="30" selected>30天</option>
-                            <option value="60">60天</option>
-                        </select>
+                    
+                    <div class="mb-2">
+                        <span class="d-block text-muted small">总成交量</span>
+                        <h5 id="total-volume">--</h5>
                     </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button type="button" class="btn btn-primary" id="refresh-btn">
-                            <i class="fas fa-sync-alt me-1"></i> 刷新数据
-                        </button>
+                    
+                    <div class="text-muted small mt-3">
+                        最后更新时间: <span id="last-updated">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 风险指标 -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>风险指标
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted small">波动率指数</span>
+                            <span id="volatility-index">--</span>
+                        </div>
+                        <div class="progress" role="progressbar" style="height: 5px;">
+                            <div class="progress-bar bg-primary" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted small">波动率偏斜</span>
+                            <span id="volatility-skew">--</span>
+                        </div>
+                        <div class="progress" role="progressbar" style="height: 5px;">
+                            <div class="progress-bar bg-info" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted small">反身性指标</span>
+                            <span id="reflexivity-indicator">--</span>
+                        </div>
+                        <div class="progress" role="progressbar" style="height: 5px;">
+                            <div class="progress-bar bg-warning" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted small">整体风险等级</span>
+                            <span id="risk-level" class="text-warning">--</span>
+                        </div>
+                        <div class="progress" role="progressbar" style="height: 5px;">
+                            <div class="progress-bar bg-danger" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-muted small mt-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        基于金融反身性理论的风险评估
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 交易所比较 -->
+        <div class="col-lg-6 col-md-12 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exchange-alt me-2"></i>交易所比较
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div id="exchange-comparison-container" style="height: 180px;">
+                                <canvas id="exchange-comparison-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div id="volume-distribution-container" style="height: 180px;">
+                                <canvas id="volume-distribution-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive mt-2">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>交易所</th>
+                                    <th>看涨成交量</th>
+                                    <th>看跌成交量</th>
+                                    <th>PCR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="exchange-detail-table-body">
+                                <!-- 数据将通过JS填充 -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- 风险指标卡片 -->
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="card-title">风险指标</h5>
+    <!-- 图表区域 -->
+    <div class="row">
+        <!-- 波动率趋势 -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-area me-2"></i>波动率趋势
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="volatility-chart-container" style="height: 300px;">
+                        <canvas id="volatility-chart"></canvas>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">波动率指数</h6>
-                                <h3 class="card-title" id="volatility-index">--</h3>
-                            </div>
-                        </div>
+        </div>
+        
+        <!-- 看跌/看涨比率趋势 -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-balance-scale me-2"></i>看跌/看涨比率趋势
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="pcr-chart-container" style="height: 300px;">
+                        <canvas id="pcr-chart"></canvas>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">波动率偏斜</h6>
-                                <h3 class="card-title" id="volatility-skew">--</h3>
-                            </div>
-                        </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 希腊字母敞口 -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-project-diagram me-2"></i>反身性强度趋势
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="greeks-chart-container" style="height: 300px;">
+                        <canvas id="greeks-chart"></canvas>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">看跌/看涨比率</h6>
-                                <h3 class="card-title" id="put-call-ratio">--</h3>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">市场情绪</h6>
-                                <h3 class="card-title" id="market-sentiment">--</h3>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">Delta敞口</h6>
-                                <h3 class="card-title" id="delta-exposure">--</h3>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="card bg-dark">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">整体风险等级</h6>
-                                <h3 class="card-title" id="risk-level">--</h3>
-                            </div>
-                        </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 风险等级趋势 -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle me-2"></i>风险等级趋势
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="risk-chart-container" style="height: 300px;">
+                        <canvas id="risk-chart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- 交易所看跌/看涨比率 -->
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="card-title">交易所看跌/看涨比率</h5>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="position: relative; height:300px;">
-                    <canvas id="pcr-chart"></canvas>
+    <!-- 最新警报 -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-bell me-2"></i>最新警报
+                    </h5>
                 </div>
-                <div class="mt-3">
-                    <div class="alert alert-info" id="pcr-analysis">
-                        正在加载分析...
+                <div class="card-body">
+                    <div id="latest-alerts">
+                        <div class="alert alert-info">目前没有警报</div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 历史波动率趋势 -->
-    <div class="col-md-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title">历史波动率趋势</h5>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="position: relative; height:300px;">
-                    <canvas id="volatility-chart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 历史风险指标趋势 -->
-    <div class="col-md-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title">历史风险指标趋势</h5>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="position: relative; height:300px;">
-                    <canvas id="risk-chart"></canvas>
                 </div>
             </div>
         </div>
@@ -156,406 +271,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    // 全局图表对象
-    let charts = {
-        pcrChart: null,
-        volatilityChart: null,
-        riskChart: null
-    };
-    
-    // 加载仪表盘数据
-    function loadDashboardData() {
-        const symbol = $('#symbol-select').val();
-        const timePeriod = $('#time-period-select').val();
-        const days = $('#days-select').val();
-        
-        // 显示加载状态
-        $('#volatility-index, #volatility-skew, #put-call-ratio, #market-sentiment, #delta-exposure, #risk-level').text('加载中...');
-        $('#pcr-analysis').html('<div class="spinner-border spinner-border-sm" role="status"></div> 正在加载分析...');
-        
-        // 请求数据
-        $.ajax({
-            url: `/api/dashboard-data?symbol=${symbol}&time_period=${timePeriod}&days=${days}`,
-            method: 'GET',
-            success: function(response) {
-                updateDashboard(response);
-            },
-            error: function(xhr, status, error) {
-                console.error('获取仪表盘数据失败:', error);
-                alert('获取数据失败，请稍后重试。');
-            }
-        });
-    }
-    
-    // 更新仪表盘数据
-    function updateDashboard(data) {
-        const latest = data.latest;
-        const historical = data.historical;
-        const pcrData = data.put_call_ratio;
-        
-        // 更新指标卡片
-        $('#volatility-index').text(formatNumber(latest.volatility_index || 0));
-        $('#volatility-skew').text(formatNumber(latest.volatility_skew || 0));
-        $('#put-call-ratio').text(formatNumber(latest.put_call_ratio || 0));
-        
-        // 设置市场情绪样式
-        const sentiment = latest.market_sentiment || 'neutral';
-        let sentimentText, sentimentClass;
-        
-        if (sentiment === 'bullish') {
-            sentimentText = '偏多';
-            sentimentClass = 'text-success';
-        } else if (sentiment === 'bearish') {
-            sentimentText = '偏空';
-            sentimentClass = 'text-danger';
-        } else {
-            sentimentText = '中性';
-            sentimentClass = 'text-info';
-        }
-        
-        $('#market-sentiment').text(sentimentText).removeClass('text-success text-danger text-info').addClass(sentimentClass);
-        
-        // 设置Delta敞口
-        $('#delta-exposure').text(formatNumber(latest.delta_exposure || 0));
-        
-        // 设置风险等级样式
-        const riskLevel = latest.risk_level || 'medium';
-        let riskText, riskClass;
-        
-        if (riskLevel === 'low') {
-            riskText = '低风险';
-            riskClass = 'text-success';
-        } else if (riskLevel === 'medium') {
-            riskText = '中等风险';
-            riskClass = 'text-warning';
-        } else if (riskLevel === 'high') {
-            riskText = '高风险';
-            riskClass = 'text-danger';
-        } else if (riskLevel === 'extreme') {
-            riskText = '极高风险';
-            riskClass = 'text-danger fw-bold';
-        }
-        
-        $('#risk-level').text(riskText).removeClass('text-success text-warning text-danger fw-bold').addClass(riskClass);
-        
-        // 更新PCR分析
-        let pcrAnalysis = '';
-        const pcr = latest.put_call_ratio || 0;
-        
-        if (pcr > 1.2) {
-            pcrAnalysis = `<i class="fas fa-arrow-down text-danger me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场偏空情绪较强，交易者更倾向于购买看跌期权寻求保护。`;
-        } else if (pcr > 1.0) {
-            pcrAnalysis = `<i class="fas fa-arrow-down text-warning me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场略偏空，交易者对下行风险有所担忧。`;
-        } else if (pcr >= 0.9 && pcr <= 1.1) {
-            pcrAnalysis = `<i class="fas fa-grip-lines text-info me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场情绪较为中性平衡。`;
-        } else if (pcr >= 0.8) {
-            pcrAnalysis = `<i class="fas fa-arrow-up text-success me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场略偏多，交易者更倾向于购买看涨期权。`;
-        } else {
-            pcrAnalysis = `<i class="fas fa-arrow-up text-success me-1"></i> 看跌/看涨比率为 <strong>${formatNumber(pcr)}</strong>，表明市场偏多情绪较强，交易者积极购买看涨期权追求上涨收益。`;
-        }
-        
-        $('#pcr-analysis').html(pcrAnalysis);
-        
-        // 更新图表
-        updatePCRChart(pcrData);
-        updateVolatilityChart(historical);
-        updateRiskChart(historical);
-    }
-    
-    // 更新看跌/看涨比率图表
-    function updatePCRChart(data) {
-        const ctx = document.getElementById('pcr-chart').getContext('2d');
-        
-        // 如果图表已存在，销毁它
-        if (charts.pcrChart) {
-            charts.pcrChart.destroy();
-        }
-        
-        // 准备图表数据
-        const exchangeData = data.exchange_data || {};
-        const exchanges = Object.keys(exchangeData);
-        const pcrValues = [];
-        const bgColors = [];
-        
-        for (const exchange of exchanges) {
-            const ratio = exchangeData[exchange].ratio || 1.0;
-            pcrValues.push(ratio);
-            
-            // 根据交易所设置颜色
-            if (exchange === 'deribit') {
-                bgColors.push('rgba(75, 192, 192, 0.7)');
-            } else if (exchange === 'binance') {
-                bgColors.push('rgba(255, 159, 64, 0.7)');
-            } else if (exchange === 'okx') {
-                bgColors.push('rgba(54, 162, 235, 0.7)');
-            } else {
-                bgColors.push('rgba(153, 102, 255, 0.7)');
-            }
-        }
-        
-        // 创建图表
-        charts.pcrChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: exchanges.map(e => e.charAt(0).toUpperCase() + e.slice(1)),
-                datasets: [{
-                    label: '看跌/看涨比率',
-                    data: pcrValues,
-                    backgroundColor: bgColors,
-                    borderColor: bgColors.map(c => c.replace('0.7', '1')),
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: '比率值'
-                        }
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const value = context.raw;
-                                let sentiment = '中性';
-                                
-                                if (value > 1.2) {
-                                    sentiment = '强烈偏空';
-                                } else if (value > 1.0) {
-                                    sentiment = '略偏空';
-                                } else if (value >= 0.9 && value <= 1.1) {
-                                    sentiment = '中性';
-                                } else if (value >= 0.8) {
-                                    sentiment = '略偏多';
-                                } else {
-                                    sentiment = '强烈偏多';
-                                }
-                                
-                                return `PCR: ${value.toFixed(2)} (${sentiment})`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    // 更新波动率图表
-    function updateVolatilityChart(data) {
-        const ctx = document.getElementById('volatility-chart').getContext('2d');
-        
-        // 如果图表已存在，销毁它
-        if (charts.volatilityChart) {
-            charts.volatilityChart.destroy();
-        }
-        
-        // 准备图表数据
-        const timestamps = data.map(item => new Date(item.timestamp).toLocaleString());
-        const volatilityIndex = data.map(item => item.volatility_index || 0);
-        const volatilitySkew = data.map(item => item.volatility_skew || 0);
-        
-        // 创建图表
-        charts.volatilityChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: timestamps,
-                datasets: [
-                    {
-                        label: '波动率指数',
-                        data: volatilityIndex,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        borderWidth: 2,
-                        tension: 0.2,
-                        yAxisID: 'y'
-                    },
-                    {
-                        label: '波动率偏斜',
-                        data: volatilitySkew,
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        borderWidth: 2,
-                        tension: 0.2,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: '时间'
-                        }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: '波动率指数'
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: '波动率偏斜'
-                        },
-                        grid: {
-                            drawOnChartArea: false
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    // 更新风险指标图表
-    function updateRiskChart(data) {
-        const ctx = document.getElementById('risk-chart').getContext('2d');
-        
-        // 如果图表已存在，销毁它
-        if (charts.riskChart) {
-            charts.riskChart.destroy();
-        }
-        
-        // 准备图表数据
-        const timestamps = data.map(item => new Date(item.timestamp).toLocaleString());
-        const pcrValues = data.map(item => item.put_call_ratio || 0);
-        const deltaExposure = data.map(item => item.delta_exposure || 0);
-        
-        // 创建图表
-        charts.riskChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: timestamps,
-                datasets: [
-                    {
-                        label: '看跌/看涨比率',
-                        data: pcrValues,
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        borderWidth: 2,
-                        tension: 0.2,
-                        yAxisID: 'y'
-                    },
-                    {
-                        label: 'Delta敞口',
-                        data: deltaExposure,
-                        borderColor: 'rgba(255, 159, 64, 1)',
-                        backgroundColor: 'rgba(255, 159, 64, 0.2)',
-                        borderWidth: 2,
-                        tension: 0.2,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: '时间'
-                        }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: '看跌/看涨比率'
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Delta敞口'
-                        },
-                        grid: {
-                            drawOnChartArea: false
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    // 格式化数字
-    function formatNumber(value) {
-        if (value === null || value === undefined) return '--';
-        return parseFloat(value).toFixed(2);
-    }
-    
-    // 刷新数据
-    function refreshData() {
-        const symbol = $('#symbol-select').val();
-        
-        $.ajax({
-            url: `/refresh-data?symbol=${symbol}`,
-            method: 'GET',
-            beforeSend: function() {
-                $('#refresh-btn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 刷新中...');
-            },
-            success: function(response) {
-                if (response.success) {
-                    // 加载最新数据
-                    loadDashboardData();
-                    alert('数据已刷新！');
-                } else {
-                    alert('刷新数据失败: ' + response.error);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('刷新数据失败:', error);
-                alert('刷新数据失败，请稍后重试。');
-            },
-            complete: function() {
-                $('#refresh-btn').prop('disabled', false).html('<i class="fas fa-sync-alt me-1"></i> 刷新数据');
-            }
-        });
-    }
-    
-    // 页面加载时初始化
-    $(document).ready(function() {
-        // 绑定筛选器变更事件
-        $('#symbol-select, #time-period-select, #days-select').change(function() {
-            loadDashboardData();
-        });
-        
-        // 绑定刷新按钮事件
-        $('#refresh-btn').click(function() {
-            refreshData();
-        });
-        
-        // 加载初始数据
-        loadDashboardData();
-    });
-</script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

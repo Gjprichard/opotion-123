@@ -215,9 +215,10 @@ function updateCharts(historyData) {
         const pcrCtx = document.getElementById('pcr-chart').getContext('2d');
         new Chart(pcrCtx, getPCRChartConfig(timestamps, pcrValues, priceValues));
         
-        // 希腊字母图表
+        // 反身性图表
         const greeksCtx = document.getElementById('greeks-chart').getContext('2d');
-        new Chart(greeksCtx, getGreeksChartConfig(timestamps, deltaValues, gammaValues, vegaValues));
+        const reflexivityValues = historyData.map(d => d.reflexivity_indicator || 0);
+        new Chart(greeksCtx, getGreeksChartConfig(timestamps, reflexivityValues));
         
         // 风险等级图表
         const riskCtx = document.getElementById('risk-chart').getContext('2d');
