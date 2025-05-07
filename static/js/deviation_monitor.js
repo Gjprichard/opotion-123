@@ -1810,9 +1810,6 @@ const EventHandlers = {
             autoRefreshInterval = setInterval(() => {
                 DataService.refreshData();
             }, 10 * 60 * 1000); // 10分钟，与后端计算频率一致
-            console.log('启用自动刷新，间隔10分钟');
-        } else {
-            console.log('已禁用自动刷新');
         }
     },
 
