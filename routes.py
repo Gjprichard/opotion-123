@@ -28,16 +28,27 @@ def dashboard():
     if time_period not in Config.TIME_PERIODS:
         time_period = '15m'
     
-    # 获取每个跟踪符号的最新风险指标
+    # 获取每个跟踪符号的最新风险指标 - 优化为单次查询
     latest_risk = {}
-    for symbol in Config.TRACKED_SYMBOLS:
-        indicator = RiskIndicator.query.filter_by(
-            symbol=symbol,
-            time_period=time_period
-        ).order_by(RiskIndicator.timestamp.desc()).first()
-        
-        if indicator:
-            latest_risk[symbol] = indicator
+    # 通过子查询获取每个符号的最新指标ID
+    latest_indicators_query = db.session.query(
+        RiskIndicator.symbol,
+        func.max(RiskIndicator.id).label('latest_id')
+    ).filter_by(time_period=time_period).group_by(RiskIndicator.symbol).subquery()
+    
+    # 使用子查询结果获取完整的指标数据
+    latest_indicators = db.session.query(RiskIndicator).join(
+        latest_indicators_query,
+        db.and_(
+            RiskIndicator.symbol == latest_indicators_query.c.symbol,
+            RiskIndicator.id == latest_indicators_query.c.latest_id
+        )
+    ).all()
+    
+    # 将结果转换为字典
+    for indicator in latest_indicators:
+        if indicator.symbol in Config.TRACKED_SYMBOLS:
+            latest_risk[indicator.symbol] = indicator
     
     # 获取活跃警报（未确认的）
     alerts = Alert.query.filter_by(
@@ -45,11 +56,24 @@ def dashboard():
         time_period=time_period
     ).order_by(Alert.timestamp.desc()).limit(10).all()
     
-    # 获取最新期权数据摘要
-    latest_data_time = db.session.query(func.max(OptionData.timestamp)).scalar()
-    options_count = OptionData.query.filter(
-        OptionData.timestamp > (datetime.utcnow() - timedelta(days=1))
-    ).count()
+    # 获取最新期权数据摘要 - 使用缓存提高性能
+    current_time = datetime.utcnow()
+    cache_key = f"latest_data_summary_{current_time.strftime('%Y-%m-%d')}"
+    
+    # 从应用程序配置中获取缓存
+    latest_data_time = getattr(app, cache_key + '_time', None)
+    options_count = getattr(app, cache_key + '_count', None)
+    
+    # 如果缓存不存在或已过期，则执行查询
+    if latest_data_time is None or options_count is None:
+        latest_data_time = db.session.query(func.max(OptionData.timestamp)).scalar()
+        options_count = OptionData.query.filter(
+            OptionData.timestamp > (current_time - timedelta(days=1))
+        ).count()
+        
+        # 更新缓存
+        setattr(app, cache_key + '_time', latest_data_time)
+        setattr(app, cache_key + '_count', options_count)
     
     return render_template('dashboard.html', 
                            latest_risk=latest_risk,

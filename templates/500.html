@@ -17,3 +17,21 @@
     </div>
 </div>
 {% endblock %}
+{% extends 'layout.html' %}
+
+{% block title %}Server Error{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-6 offset-md-3 text-center">
+            <h1 class="display-1">500</h1>
+            <h2 class="mb-4">{{ t('server_error') }}</h2>
+            <p class="lead mb-5">{{ t('server_error_message') }}</p>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                <i class="fas fa-home"></i> {{ t('return_to_dashboard') }}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

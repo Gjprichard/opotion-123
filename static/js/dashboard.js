@@ -1,16 +1,97 @@
 // dashboard.js - 完全重构的仪表盘功能
 // 用于显示期权市场风险监控数据
 
+// 数据缓存
+const dataCache = {
+    dashboardData: {},
+    cacheTimeout: 60000, // 缓存超时时间（毫秒）
+    timestamp: {}
+};
+
 // 声明全局变量以存储图表对象
 let riskChart = null;
 let reflexivityChart = null;
 let symbolsData = {};
 
+// 加载仪表盘数据
+function loadDashboardData(forceRefresh = false) {
+    const symbol = document.getElementById('symbol-selector').value;
+    const days = document.getElementById('daysSelect').value || 30; // 使用默认值30天
+    const timePeriod = document.getElementById('time-period-selector').value || '15m'; // 使用默认值15m
+
+    // 缓存键
+    const cacheKey = `${symbol}_${days}_${timePeriod}`;
+
+    // 检查是否有有效缓存
+    const now = Date.now();
+    if (!forceRefresh && 
+        dataCache.dashboardData[cacheKey] &&
+        dataCache.timestamp[cacheKey] &&
+        now - dataCache.timestamp[cacheKey] < dataCache.cacheTimeout) {
+
+        // 使用缓存数据更新图表
+        updateCharts(dataCache.dashboardData[cacheKey]);
+        return Promise.resolve(); // 返回一个已解决的Promise
+    }
+
+    // 显示加载中状态
+    document.getElementById('loadingIndicator').style.display = 'block';
+
+    // 发送AJAX请求获取仪表盘数据
+    return fetch(`/api/dashboard/data?symbol=${symbol}&days=${days}&time_period=${timePeriod}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Network response was not ok: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // 更新缓存
+            dataCache.dashboardData[cacheKey] = data;
+            dataCache.timestamp[cacheKey] = now;
+
+            // 更新图表
+            updateCharts(data);
+
+            // 隐藏加载中状态
+            document.getElementById('loadingIndicator').style.display = 'none';
+        })
+        .catch(error => {
+            console.error('Error loading dashboard data:', error);
+            document.getElementById('loadingIndicator').style.display = 'none';
+
+            // 显示用户友好的错误消息
+            const errorElement = document.getElementById('error-message');
+            if (errorElement) {
+                errorElement.textContent = `加载数据失败: ${error.message}`;
+                errorElement.style.display = 'block';
+
+                // 3秒后隐藏错误消息
+                setTimeout(() => {
+                    errorElement.style.display = 'none';
+                }, 3000);
+            } else {
+                alert('Error loading dashboard data. Please try again.');
+            }
+
+            // 如果缓存中有旧数据，则使用旧数据
+            if (dataCache.dashboardData[cacheKey]) {
+                updateCharts(dataCache.dashboardData[cacheKey]);
+            }
+        });
+}
+
+// 添加刷新按钮的处理函数
+function refreshDashboardData() {
+    return loadDashboardData(true); // 强制刷新
+}
+
+
 // 当页面加载完成时初始化仪表盘
 document.addEventListener('DOMContentLoaded', function() {
     console.log('页面加载完成，初始化仪表盘...');
     console.log('检查Chart.js是否加载:', typeof Chart !== 'undefined' ? '已加载' : '未加载');
-    
+
     if (typeof Chart === 'undefined') {
         console.error('Chart.js未加载，这会导致图表创建失败');
         showToast('图表库未加载，请刷新页面或检查网络连接', 'danger');
@@ -27,22 +108,22 @@ document.addEventListener('DOMContentLoaded', function() {
         // 初始化事件监听器
         setupEventListeners();
         console.log('事件监听器设置完成');
-        
+
         // 获取当前选择的交易对和时间周期
         const symbolSelector = document.getElementById('symbol-selector');
         const timePeriodSelector = document.getElementById('time-period-selector');
-        
+
         if (!symbolSelector) {
             console.warn('警告: 找不到交易对选择器 #symbol-selector');
         }
-        
+
         if (!timePeriodSelector) {
             console.warn('警告: 找不到时间周期选择器 #time-period-selector');
         }
-        
+
         const selectedSymbol = symbolSelector?.value || 'BTC';
         const selectedTimePeriod = timePeriodSelector?.value || '15m';
-        
+
         console.log('初始选择:', {selectedSymbol, selectedTimePeriod});
 
         // 初始化图表
@@ -57,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('自动刷新图表数据:', {currentSymbol, currentTimePeriod});
             loadDashboardData(currentSymbol, 30, currentTimePeriod);
         }, 600000); // 10 minutes (600000ms)
-        
+
         // 在页面上显示初始化完成信息
         showToast('仪表盘初始化完成，正在加载数据...', 'info');
     } catch (error) {
@@ -65,6 +146,45 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast('仪表盘初始化出错: ' + error.message, 'danger');
     }
 });
+
+// 添加页面可见性变化监听，优化性能
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+        // 页面变为可见时，如果缓存超时则刷新数据
+        const symbol = document.getElementById('symbol-selector').value;
+        const days = document.getElementById('daysSelect').value || 30; // 使用默认值30天
+        const timePeriod = document.getElementById('time-period-selector').value || '15m'; // 使用默认值15m
+        const cacheKey = `${symbol}_${days}_${timePeriod}`;
+
+        const now = Date.now();
+        if (!dataCache.timestamp[cacheKey] || 
+            now - dataCache.timestamp[cacheKey] > dataCache.cacheTimeout) {
+            loadDashboardData(false);
+        }
+    }
+});
+
+// 添加懒加载功能，仅在元素可见时加载数据
+document.addEventListener('DOMContentLoaded', function() {
+    // 创建交叉观察器以检测图表容器是否可见
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                // 容器可见时加载数据
+                loadDashboardData();
+                // 停止观察
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.1 }); // 当10%的元素可见时触发
+
+    // 开始观察图表容器
+    const chartContainers = document.querySelectorAll('.chart-container');
+    chartContainers.forEach(container => {
+        observer.observe(container);
+    });
+});
+
 
 // 设置所有事件监听器
 function setupEventListeners() {
@@ -121,27 +241,13 @@ function setupEventListeners() {
             const symbol = document.getElementById('symbol-selector').value || 'BTC';
             const timePeriod = document.getElementById('time-period-selector').value || '15m';
 
-            // 调用API刷新数据
-            fetch('/api/data/refresh', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ symbol: symbol })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // 刷新成功后重新加载仪表盘数据
-                    loadDashboardData(symbol, 30, timePeriod);
-                    showToast('数据刷新成功', 'success');
-                } else {
-                    showToast('刷新数据失败: ' + (data.message || '未知错误'), 'danger');
-                }
+            refreshDashboardData() // Use the new refresh function
+            .then(() => {
+                showToast('数据刷新成功', 'success');
             })
             .catch(error => {
                 console.error('刷新数据出错:', error);
-                showToast('连接服务器出错', 'danger');
+                showToast('刷新数据失败: ' + error.message, 'danger');
             })
             .finally(() => {
                 // 恢复按钮状态
@@ -160,156 +266,46 @@ function setupEventListeners() {
     });
 }
 
-// 加载仪表盘数据
-function loadDashboardData(symbol, days = 30, timePeriod = '15m') {
-    console.log(`加载${symbol}的最近${days}天数据，时间周期：${timePeriod}...`);
+// 更新图表函数  (This function needs to be implemented based on your chart library)
+function updateCharts(data) {
+    console.log('更新图表...', data);
 
-    // 初始化全局图表对象容器
-    if (!window.chartObjects) {
-        window.chartObjects = {};
-        console.log('初始化全局图表对象容器');
-    }
-
-    // 获取图表容器
-    const riskChartContainer = document.getElementById('risk-chart-container');
-    const reflexivityChartContainer = document.getElementById('reflexivity-chart-container');
-    
-    // 检查DOM元素是否存在
-    if (!riskChartContainer) {
-        console.error('错误: 找不到风险图表容器元素 #risk-chart-container');
-    }
-    
-    if (!reflexivityChartContainer) {
-        console.error('错误: 找不到反身性图表容器元素 #reflexivity-chart-container');
-    }
-    
-    // 仅在首次加载或没有有效图表时显示加载指示器
-    if (riskChartContainer && (!window.chartObjects.riskChart)) {
-        console.log('显示风险图表加载指示器');
-        riskChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    // 更新风险指标和市场情绪显示
+    try {
+        updateRiskIndicators(data.symbol, data);
+        console.log('风险指标更新完成');
+    } catch (e) {
+        console.error('更新风险指标出错:', e);
     }
 
-    if (reflexivityChartContainer && (!window.chartObjects.reflexivityChart)) {
-        console.log('显示反身性图表加载指示器');
-        reflexivityChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    //  Implement chart updates using your charting library (e.g., Chart.js) here.
+    //  Example using Chart.js:
+    if (riskChart) {
+        riskChart.data.datasets[0].data = data.volaxivity;
+        riskChart.data.datasets[1].data = data.volatility_skew;
+        riskChart.data.datasets[2].data = data.put_call_ratio;
+        riskChart.update();
+    }
+    if (reflexivityChart) {
+        reflexivityChart.data.datasets[0].data = data.reflexivity_indicator;
+        reflexivityChart.update();
     }
 
-    // 显示刷新状态 - 仅在页面顶部提示，不干扰图表
+    // 更新最后刷新时间
     const lastUpdateElement = document.getElementById('last-update-time');
     if (lastUpdateElement) {
-        lastUpdateElement.innerHTML = '<small><i class="fas fa-sync-alt fa-spin"></i> 正在获取数据...</small>';
-    } else {
-        console.warn('警告: 找不到最后更新时间元素 #last-update-time');
+        const now = new Date();
+        const timeString = now.toLocaleTimeString();
+        lastUpdateElement.innerHTML = `<small>最后更新: ${timeString}</small>`;
     }
-
-    // 调用API获取数据，包含时间周期
-    const apiUrl = `/api/dashboard/data?symbol=${symbol}&days=${days}&time_period=${timePeriod}`;
-    console.log('API请求URL:', apiUrl);
-    
-    fetch(apiUrl)
-        .then(response => {
-            console.log('API响应状态:', response.status);
-            if (!response.ok) {
-                throw new Error(`HTTP错误! 状态: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('获取到的数据:', data);
-            
-            // 检查数据是否有效
-            if (!data || (!data.timestamps || data.timestamps.length === 0)) {
-                console.error('接收到无效数据结构:', data);
-                throw new Error('接收到的数据无效，缺少必要的数据点');
-            }
-
-            // 存储数据以供后续使用
-            symbolsData[symbol] = data;
-
-            // 仅在没有有效图表时重建容器
-            if (riskChartContainer && (!window.chartObjects.riskChart)) {
-                console.log('重建风险图表容器');
-                riskChartContainer.innerHTML = '<canvas id="risk-chart"></canvas>';
-            }
-
-            if (reflexivityChartContainer && (!window.chartObjects.reflexivityChart)) {
-                console.log('重建反身性图表容器');
-                reflexivityChartContainer.innerHTML = '<canvas id="reflexivity-chart"></canvas>';
-            }
-
-            // 检查图表DOM元素
-            const riskChartEl = document.getElementById('risk-chart');
-            const reflexivityChartEl = document.getElementById('reflexivity-chart');
-            
-            if (!riskChartEl) console.error('错误: 找不到风险图表元素 #risk-chart');
-            if (!reflexivityChartEl) console.error('错误: 找不到反身性图表元素 #reflexivity-chart');
-
-            // 创建或更新图表
-            try {
-                createRiskChart(data);
-                console.log('风险图表创建完成');
-            } catch (e) {
-                console.error('创建风险图表出错:', e);
-            }
-            
-            try {
-                createReflexivityChart(data);
-                console.log('反身性图表创建完成');
-            } catch (e) {
-                console.error('创建反身性图表出错:', e);
-            }
-
-            // 更新市场情绪和风险指标显示
-            try {
-                updateRiskIndicators(symbol, data);
-                console.log('风险指标更新完成');
-            } catch (e) {
-                console.error('更新风险指标出错:', e);
-            }
-            
-            // 更新最后刷新时间
-            if (lastUpdateElement) {
-                const now = new Date();
-                const timeString = now.toLocaleTimeString();
-                lastUpdateElement.innerHTML = `<small>最后更新: ${timeString}</small>`;
-            }
-        })
-        .catch(error => {
-            console.error('获取仪表盘数据出错:', error);
-
-            // 保留现有图表，仅显示错误信息提示
-            if (lastUpdateElement) {
-                lastUpdateElement.innerHTML = '<small class="text-danger"><i class="fas fa-exclamation-triangle"></i> 数据获取失败</small>';
-            }
-            
-            // 只有在没有图表的情况下才显示错误提示替代图表
-            if (riskChartContainer && (!window.chartObjects.riskChart)) {
-                riskChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错: ' + error.message + '</div>';
-            }
-
-            if (reflexivityChartContainer && (!window.chartObjects.reflexivityChart)) {
-                reflexivityChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错: ' + error.message + '</div>';
-            }
-            
-            // 显示错误通知
-            showToast('获取数据失败: ' + error.message + '，将在下次自动刷新时重试', 'warning');
-            
-            // 尝试显示额外的调试信息
-            console.log('调试信息 - 环境检查:');
-            console.log('Chart.js 是否加载:', typeof Chart !== 'undefined' ? '是' : '否');
-            console.log('符号数据对象:', symbolsData);
-            console.log('DOM元素检查:');
-            console.log('- risk-chart-container:', riskChartContainer ? '存在' : '不存在');
-            console.log('- reflexivity-chart-container:', reflexivityChartContainer ? '存在' : '不存在');
-            console.log('- risk-chart:', document.getElementById('risk-chart') ? '存在' : '不存在');
-            console.log('- reflexivity-chart:', document.getElementById('reflexivity-chart') ? '存在' : '不存在');
-        });
 }
+
+// 加载仪表盘数据 (Simplified) - Replaced with the cached version above
 
 // 创建风险指标图表
 function createRiskChart(data) {
     console.log('创建风险指标图表...');
-    
+
     // 检查数据有效性
     if (!data || !data.timestamps || data.timestamps.length === 0) {
         console.error('创建风险图表失败：无效的数据格式', data);
@@ -432,7 +428,7 @@ function createRiskChart(data) {
 // 创建反身性指标图表
 function createReflexivityChart(data) {
     console.log('创建反身性指标图表...');
-    
+
     // 检查数据有效性
     if (!data || !data.timestamps || data.timestamps.length === 0) {
         console.error('创建反身性图表失败：无效的数据格式', data);
@@ -455,7 +451,7 @@ function createReflexivityChart(data) {
 
         // 获取翻译后的标签
         const reflexivityLabel = document.querySelector('.risk-level:nth-child(4)')?.textContent || 'Reflexivity Indicator';
-        
+
         console.log('反身性标签:', reflexivityLabel);
         console.log('反身性数据长度:', {
             timestamps: data.timestamps?.length || 0,
