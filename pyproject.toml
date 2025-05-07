@@ -1,3 +1,4 @@
+
 [project]
 name = "repl-nix-workspace"
 version = "0.1.0"
@@ -10,6 +11,7 @@ dependencies = [
     "flask-apscheduler>=1.13.1",
     "flask>=3.1.0",
     "flask-sqlalchemy>=3.1.1",
+    "flask-wtf>=1.2.1",
     "gunicorn>=23.0.0",
     "numpy>=2.2.5",
     "pandas>=2.2.3",

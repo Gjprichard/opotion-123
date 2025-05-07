@@ -230,3 +230,251 @@ def get_alert_thresholds_by_period(indicator=None, time_period='4h'):
     except Exception as e:
         logger.error(f"Error getting alert thresholds: {str(e)}")
         return []
+from datetime import datetime, timedelta
+from app import db, app
+from models import Alert, AlertThreshold
+from config import Config
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+# 警报缓存超时时间（秒）
+ALERT_CACHE_TIMEOUT = 60
+
+def get_active_alerts(symbol=None, time_period=None, indicator=None, limit=50):
+    """
+    获取活跃的警报（未确认的）
+    
+    参数:
+        symbol (str, optional): 筛选特定交易对的警报
+        time_period (str, optional): 筛选特定时间周期的警报
+        indicator (str, optional): 筛选特定指标的警报
+        limit (int): 返回结果的最大数量
+        
+    返回:
+        list: 警报对象列表
+    """
+    try:
+        # 缓存键
+        cache_key = f"active_alerts_{symbol}_{time_period}_{indicator}_{limit}"
+        cache_time_key = f"{cache_key}_time"
+        
+        # 获取缓存时间
+        cache_time = getattr(app, cache_time_key, None)
+        
+        # 检查缓存是否有效
+        if cache_time and (datetime.utcnow() - cache_time).total_seconds() < ALERT_CACHE_TIMEOUT:
+            cached_alerts = getattr(app, cache_key, None)
+            if cached_alerts is not None:
+                return cached_alerts
+        
+        # 构建查询
+        query = Alert.query.filter_by(is_acknowledged=False)
+        
+        if symbol:
+            query = query.filter_by(symbol=symbol)
+        
+        if time_period:
+            query = query.filter_by(time_period=time_period)
+        
+        if indicator:
+            query = query.filter_by(indicator=indicator)
+        
+        # 执行查询
+        alerts = query.order_by(Alert.timestamp.desc()).limit(limit).all()
+        
+        # 更新缓存
+        setattr(app, cache_key, alerts)
+        setattr(app, cache_time_key, datetime.utcnow())
+        
+        return alerts
+    except Exception as e:
+        logger.error(f"Error getting active alerts: {str(e)}")
+        return []
+
+def acknowledge_alert(alert_id):
+    """
+    确认警报
+    
+    参数:
+        alert_id (int): 警报ID
+        
+    返回:
+        bool: 操作是否成功
+    """
+    try:
+        alert = Alert.query.get(alert_id)
+        
+        if not alert:
+            return False
+        
+        alert.is_acknowledged = True
+        db.session.commit()
+        
+        # 清除可能受此操作影响的缓存
+        for key in dir(app):
+            if key.startswith('active_alerts_'):
+                delattr(app, key)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error acknowledging alert {alert_id}: {str(e)}")
+        db.session.rollback()
+        return False
+
+def update_alert_threshold(indicator, time_period, attention, warning, severe):
+    """
+    更新警报阈值设置
+    
+    参数:
+        indicator (str): 指标名称
+        time_period (str): 时间周期
+        attention (float): 注意级别阈值
+        warning (float): 警告级别阈值
+        severe (float): 严重级别阈值
+        
+    返回:
+        bool: 操作是否成功
+    """
+    try:
+        # 查找现有的阈值设置
+        threshold = AlertThreshold.query.filter_by(
+            indicator=indicator,
+            time_period=time_period
+        ).first()
+        
+        if threshold:
+            # 更新现有阈值
+            threshold.attention_threshold = attention
+            threshold.warning_threshold = warning
+            threshold.severe_threshold = severe
+        else:
+            # 创建新的阈值设置
+            threshold = AlertThreshold(
+                indicator=indicator,
+                time_period=time_period,
+                attention_threshold=attention,
+                warning_threshold=warning,
+                severe_threshold=severe
+            )
+            db.session.add(threshold)
+        
+        db.session.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error updating alert threshold: {str(e)}")
+        db.session.rollback()
+        return False
+
+def create_alert(symbol, alert_type, message, indicator, value, threshold, time_period='15m'):
+    """
+    创建新的警报
+    
+    参数:
+        symbol (str): 交易对符号
+        alert_type (str): 警报类型 ('attention', 'warning', 'severe')
+        message (str): 警报消息
+        indicator (str): 触发警报的指标
+        value (float): 指标当前值
+        threshold (float): 触发阈值
+        time_period (str, optional): 时间周期，默认为'15m'
+        
+    返回:
+        Alert: 创建的警报对象，如果创建失败则返回None
+    """
+    try:
+        # 检查是否已存在相同的未确认警报
+        existing_alert = Alert.query.filter_by(
+            symbol=symbol,
+            indicator=indicator,
+            alert_type=alert_type,
+            is_acknowledged=False,
+            time_period=time_period
+        ).order_by(Alert.timestamp.desc()).first()
+        
+        # 如果存在类似的警报并且创建时间在1小时内，则不创建新警报
+        if existing_alert and (datetime.utcnow() - existing_alert.timestamp).total_seconds() < 3600:
+            return existing_alert
+        
+        # 创建新警报
+        alert = Alert(
+            symbol=symbol,
+            alert_type=alert_type,
+            message=message,
+            indicator=indicator,
+            value=value,
+            threshold=threshold,
+            time_period=time_period
+        )
+        
+        db.session.add(alert)
+        db.session.commit()
+        
+        # 清除可能受此操作影响的缓存
+        for key in dir(app):
+            if key.startswith('active_alerts_'):
+                delattr(app, key)
+        
+        return alert
+    except Exception as e:
+        logger.error(f"Error creating alert: {str(e)}")
+        db.session.rollback()
+        return None
+
+def get_alert_thresholds(time_period='15m'):
+    """
+    获取特定时间周期的所有警报阈值设置
+    
+    参数:
+        time_period (str): 时间周期
+        
+    返回:
+        dict: 以指标名称为键的阈值设置字典
+    """
+    try:
+        # 缓存键
+        cache_key = f"alert_thresholds_{time_period}"
+        cache_time_key = f"{cache_key}_time"
+        
+        # 获取缓存时间
+        cache_time = getattr(app, cache_time_key, None)
+        
+        # 检查缓存是否有效
+        if cache_time and (datetime.utcnow() - cache_time).total_seconds() < ALERT_CACHE_TIMEOUT * 5:  # 阈值缓存时间较长
+            cached_thresholds = getattr(app, cache_key, None)
+            if cached_thresholds is not None:
+                return cached_thresholds
+        
+        # 从数据库获取阈值设置
+        thresholds = AlertThreshold.query.filter_by(time_period=time_period).all()
+        
+        # 构建结果字典
+        result = {}
+        for t in thresholds:
+            result[t.indicator] = {
+                'attention': t.attention_threshold,
+                'warning': t.warning_threshold,
+                'severe': t.severe_threshold
+            }
+        
+        # 合并默认阈值
+        for indicator, periods in Config.DEFAULT_ALERT_THRESHOLDS.items():
+            if indicator not in result and time_period in periods:
+                result[indicator] = periods[time_period]
+        
+        # 更新缓存
+        setattr(app, cache_key, result)
+        setattr(app, cache_time_key, datetime.utcnow())
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error getting alert thresholds: {str(e)}")
+        
+        # 出错时返回默认阈值
+        result = {}
+        for indicator, periods in Config.DEFAULT_ALERT_THRESHOLDS.items():
+            if time_period in periods:
+                result[indicator] = periods[time_period]
+        
+        return result
