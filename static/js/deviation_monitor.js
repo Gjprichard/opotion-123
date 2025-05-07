@@ -1964,69 +1964,57 @@ const VolumeAnalysisModule = {
      * @param {Object} data - 包含exchange_data的多交易所数据
      */
     createExchangeComparisonCharts(data) {
-        if (!data || !data.exchange_data) {
-            console.log('没有有效的交易所数据用于创建对比图表');
+        if (!data) {
+            console.log('没有有效的数据用于创建对比图表');
             return;
         }
-
+        
         try {
-            // 确保至少有一个交易所的数据
-            const exchanges = Object.keys(data.exchange_data);
-            if (exchanges.length === 0) {
-                console.log('没有交易所数据可用于比较图表');
-                return;
+            // 确保exchange_data存在，如果不存在则创建一个空对象
+            const exchangeData = data.exchange_data || {};
+            
+            // 即使没有任何交易所数据，我们也要确保预期的交易所存在
+            // 这样图表能显示所有交易所，即使某些没有数据
+            const expectedExchanges = ['deribit', 'binance', 'okx'];
+            let modifiedExchangeData = { ...exchangeData };
+            
+            // 确保每个预期的交易所都有一个数据条目
+            for (const exchange of expectedExchanges) {
+                if (!modifiedExchangeData[exchange]) {
+                    // 如果交易所没有数据，添加一个空条目
+                    modifiedExchangeData[exchange] = {
+                        call_volume: 0,
+                        put_volume: 0,
+                        ratio: 1.0,
+                        anomaly_calls: 0,
+                        anomaly_puts: 0
+                    };
+                    console.log(`为${exchange}创建空数据条目以确保图表正确显示`);
+                }
             }
-
-            // 如果只有一个交易所数据，确保我们能生成有意义的图表
-            if (exchanges.length === 1) {
-                console.log('仅有一个交易所数据，将使用模拟比较数据创建图表');
-                // 添加一个额外的空交易所数据，以确保图表可以正常渲染
-                // 这会保留原始交易所的真实数据
-                const existingExchange = exchanges[0];
-                const existingData = data.exchange_data[existingExchange];
-
-                try {
-                    // 创建看跌/看涨比率对比图
-                    this.createPCRComparisonChart(data.exchange_data);
-                } catch (err) {
-                    console.error('创建PCR对比图表出错:', err);
-                }
-
-                try {
-                    // 创建成交量分布图
-                    this.createVolumeDistributionChart(data.exchange_data);
-                } catch (err) {
-                    console.error('创建成交量分布图表出错:', err);
-                }
-
-                try {
-                    // 创建期权溢价差异图
-                    this.createPremiumSpreadChart(data.exchange_data);
-                } catch (err) {
-                    console.error('创建期权溢价差异图表出错:', err);
-                }
-            } else {
-                // 多个交易所数据，正常创建图表
-                try {
-                    // 创建看跌/看涨比率对比图
-                    this.createPCRComparisonChart(data.exchange_data);
-                } catch (err) {
-                    console.error('创建PCR对比图表出错:', err);
-                }
-
-                try {
-                    // 创建成交量分布图
-                    this.createVolumeDistributionChart(data.exchange_data);
-                } catch (err) {
-                    console.error('创建成交量分布图表出错:', err);
-                }
-
-                try {
-                    // 创建期权溢价差异图
-                    this.createPremiumSpreadChart(data.exchange_data);
-                } catch (err) {
-                    console.error('创建期权溢价差异图表出错:', err);
-                }
+            
+            // 记录交易所数据以便调试
+            console.log('用于创建图表的交易所数据:', modifiedExchangeData);
+            
+            try {
+                // 创建看跌/看涨比率对比图
+                this.createPCRComparisonChart(modifiedExchangeData);
+            } catch (err) {
+                console.error('创建PCR对比图表出错:', err);
+            }
+            
+            try {
+                // 创建成交量分布图
+                this.createVolumeDistributionChart(modifiedExchangeData);
+            } catch (err) {
+                console.error('创建成交量分布图表出错:', err);
+            }
+            
+            try {
+                // 创建期权溢价差异图
+                this.createPremiumSpreadChart(modifiedExchangeData);
+            } catch (err) {
+                console.error('创建期权溢价差异图表出错:', err);
             }
         } catch (e) {
             console.error('创建交易所对比图表出错:', e);
