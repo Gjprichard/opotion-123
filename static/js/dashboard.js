@@ -9,23 +9,61 @@ let symbolsData = {};
 // 当页面加载完成时初始化仪表盘
 document.addEventListener('DOMContentLoaded', function() {
     console.log('页面加载完成，初始化仪表盘...');
+    console.log('检查Chart.js是否加载:', typeof Chart !== 'undefined' ? '已加载' : '未加载');
+    
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js未加载，这会导致图表创建失败');
+        showToast('图表库未加载，请刷新页面或检查网络连接', 'danger');
+        return;
+    }
 
-    // 初始化事件监听器
-    setupEventListeners();
+    // 确保全局图表对象存在
+    if (!window.chartObjects) {
+        window.chartObjects = {};
+        console.log('初始化全局图表对象容器');
+    }
 
-    // 获取当前选择的交易对和时间周期
-    const selectedSymbol = document.getElementById('symbol-selector').value || 'BTC';
-    const selectedTimePeriod = document.getElementById('time-period-selector').value || '15m';
+    try {
+        // 初始化事件监听器
+        setupEventListeners();
+        console.log('事件监听器设置完成');
+        
+        // 获取当前选择的交易对和时间周期
+        const symbolSelector = document.getElementById('symbol-selector');
+        const timePeriodSelector = document.getElementById('time-period-selector');
+        
+        if (!symbolSelector) {
+            console.warn('警告: 找不到交易对选择器 #symbol-selector');
+        }
+        
+        if (!timePeriodSelector) {
+            console.warn('警告: 找不到时间周期选择器 #time-period-selector');
+        }
+        
+        const selectedSymbol = symbolSelector?.value || 'BTC';
+        const selectedTimePeriod = timePeriodSelector?.value || '15m';
+        
+        console.log('初始选择:', {selectedSymbol, selectedTimePeriod});
 
-    // 初始化图表
-    loadDashboardData(selectedSymbol, 30, selectedTimePeriod);
+        // 初始化图表
+        console.log('开始初始化图表数据');
+        loadDashboardData(selectedSymbol, 30, selectedTimePeriod);
 
-    // 设置自动刷新（每10分钟）与后端计算频率一致
-    setInterval(function() {
-        const currentSymbol = document.getElementById('symbol-selector').value || 'BTC';
-        const currentTimePeriod = document.getElementById('time-period-selector').value || '15m';
-        loadDashboardData(currentSymbol, 30, currentTimePeriod);
-    }, 600000); // Changed to 10 minutes (600000ms)
+        // 设置自动刷新（每10分钟）与后端计算频率一致
+        console.log('设置自动刷新定时器，间隔10分钟');
+        const refreshInterval = setInterval(function() {
+            const currentSymbol = document.getElementById('symbol-selector')?.value || 'BTC';
+            const currentTimePeriod = document.getElementById('time-period-selector')?.value || '15m';
+            console.log('自动刷新图表数据:', {currentSymbol, currentTimePeriod});
+            loadDashboardData(currentSymbol, 30, currentTimePeriod);
+        }, 600000); // 10 minutes (600000ms)
+        
+        // 在页面上显示初始化完成信息
+        showToast('仪表盘初始化完成，正在加载数据...', 'info');
+    } catch (error) {
+        console.error('仪表盘初始化出错:', error);
+        showToast('仪表盘初始化出错: ' + error.message, 'danger');
+    }
 });
 
 // 设置所有事件监听器
@@ -126,16 +164,33 @@ function setupEventListeners() {
 function loadDashboardData(symbol, days = 30, timePeriod = '15m') {
     console.log(`加载${symbol}的最近${days}天数据，时间周期：${timePeriod}...`);
 
+    // 初始化全局图表对象容器
+    if (!window.chartObjects) {
+        window.chartObjects = {};
+        console.log('初始化全局图表对象容器');
+    }
+
     // 获取图表容器
     const riskChartContainer = document.getElementById('risk-chart-container');
     const reflexivityChartContainer = document.getElementById('reflexivity-chart-container');
     
+    // 检查DOM元素是否存在
+    if (!riskChartContainer) {
+        console.error('错误: 找不到风险图表容器元素 #risk-chart-container');
+    }
+    
+    if (!reflexivityChartContainer) {
+        console.error('错误: 找不到反身性图表容器元素 #reflexivity-chart-container');
+    }
+    
     // 仅在首次加载或没有有效图表时显示加载指示器
-    if (riskChartContainer && (!window.chartObjects || !window.chartObjects.riskChart)) {
+    if (riskChartContainer && (!window.chartObjects.riskChart)) {
+        console.log('显示风险图表加载指示器');
         riskChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     }
 
-    if (reflexivityChartContainer && (!window.chartObjects || !window.chartObjects.reflexivityChart)) {
+    if (reflexivityChartContainer && (!window.chartObjects.reflexivityChart)) {
+        console.log('显示反身性图表加载指示器');
         reflexivityChartContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     }
 
@@ -143,11 +198,17 @@ function loadDashboardData(symbol, days = 30, timePeriod = '15m') {
     const lastUpdateElement = document.getElementById('last-update-time');
     if (lastUpdateElement) {
         lastUpdateElement.innerHTML = '<small><i class="fas fa-sync-alt fa-spin"></i> 正在获取数据...</small>';
+    } else {
+        console.warn('警告: 找不到最后更新时间元素 #last-update-time');
     }
 
     // 调用API获取数据，包含时间周期
-    fetch(`/api/dashboard/data?symbol=${symbol}&days=${days}&time_period=${timePeriod}`)
+    const apiUrl = `/api/dashboard/data?symbol=${symbol}&days=${days}&time_period=${timePeriod}`;
+    console.log('API请求URL:', apiUrl);
+    
+    fetch(apiUrl)
         .then(response => {
+            console.log('API响应状态:', response.status);
             if (!response.ok) {
                 throw new Error(`HTTP错误! 状态: ${response.status}`);
             }
@@ -155,25 +216,56 @@ function loadDashboardData(symbol, days = 30, timePeriod = '15m') {
         })
         .then(data => {
             console.log('获取到的数据:', data);
+            
+            // 检查数据是否有效
+            if (!data || (!data.timestamps || data.timestamps.length === 0)) {
+                console.error('接收到无效数据结构:', data);
+                throw new Error('接收到的数据无效，缺少必要的数据点');
+            }
 
             // 存储数据以供后续使用
             symbolsData[symbol] = data;
 
             // 仅在没有有效图表时重建容器
-            if (riskChartContainer && (!window.chartObjects || !window.chartObjects.riskChart)) {
+            if (riskChartContainer && (!window.chartObjects.riskChart)) {
+                console.log('重建风险图表容器');
                 riskChartContainer.innerHTML = '<canvas id="risk-chart"></canvas>';
             }
 
-            if (reflexivityChartContainer && (!window.chartObjects || !window.chartObjects.reflexivityChart)) {
+            if (reflexivityChartContainer && (!window.chartObjects.reflexivityChart)) {
+                console.log('重建反身性图表容器');
                 reflexivityChartContainer.innerHTML = '<canvas id="reflexivity-chart"></canvas>';
             }
 
+            // 检查图表DOM元素
+            const riskChartEl = document.getElementById('risk-chart');
+            const reflexivityChartEl = document.getElementById('reflexivity-chart');
+            
+            if (!riskChartEl) console.error('错误: 找不到风险图表元素 #risk-chart');
+            if (!reflexivityChartEl) console.error('错误: 找不到反身性图表元素 #reflexivity-chart');
+
             // 创建或更新图表
-            createRiskChart(data);
-            createReflexivityChart(data);
+            try {
+                createRiskChart(data);
+                console.log('风险图表创建完成');
+            } catch (e) {
+                console.error('创建风险图表出错:', e);
+            }
+            
+            try {
+                createReflexivityChart(data);
+                console.log('反身性图表创建完成');
+            } catch (e) {
+                console.error('创建反身性图表出错:', e);
+            }
 
             // 更新市场情绪和风险指标显示
-            updateRiskIndicators(symbol, data);
+            try {
+                updateRiskIndicators(symbol, data);
+                console.log('风险指标更新完成');
+            } catch (e) {
+                console.error('更新风险指标出错:', e);
+            }
             
             // 更新最后刷新时间
             if (lastUpdateElement) {
@@ -191,176 +283,265 @@ function loadDashboardData(symbol, days = 30, timePeriod = '15m') {
             }
             
             // 只有在没有图表的情况下才显示错误提示替代图表
-            if (riskChartContainer && (!window.chartObjects || !window.chartObjects.riskChart)) {
-                riskChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错</div>';
+            if (riskChartContainer && (!window.chartObjects.riskChart)) {
+                riskChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错: ' + error.message + '</div>';
             }
 
-            if (reflexivityChartContainer && (!window.chartObjects || !window.chartObjects.reflexivityChart)) {
-                reflexivityChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错</div>';
+            if (reflexivityChartContainer && (!window.chartObjects.reflexivityChart)) {
+                reflexivityChartContainer.innerHTML = '<div class="alert alert-danger">加载图表数据出错: ' + error.message + '</div>';
             }
             
             // 显示错误通知
-            showToast('获取数据失败，将在下次自动刷新时重试', 'warning');
+            showToast('获取数据失败: ' + error.message + '，将在下次自动刷新时重试', 'warning');
+            
+            // 尝试显示额外的调试信息
+            console.log('调试信息 - 环境检查:');
+            console.log('Chart.js 是否加载:', typeof Chart !== 'undefined' ? '是' : '否');
+            console.log('符号数据对象:', symbolsData);
+            console.log('DOM元素检查:');
+            console.log('- risk-chart-container:', riskChartContainer ? '存在' : '不存在');
+            console.log('- reflexivity-chart-container:', reflexivityChartContainer ? '存在' : '不存在');
+            console.log('- risk-chart:', document.getElementById('risk-chart') ? '存在' : '不存在');
+            console.log('- reflexivity-chart:', document.getElementById('reflexivity-chart') ? '存在' : '不存在');
         });
 }
 
 // 创建风险指标图表
 function createRiskChart(data) {
     console.log('创建风险指标图表...');
-
-    const riskChartElement = document.getElementById('risk-chart');
-    if (!riskChartElement) return;
-
-    const ctx = riskChartElement.getContext('2d');
-
-    // 获取翻译后的标签
-    const volaxivityLabel = document.querySelector('.risk-level:nth-child(1)')?.textContent || 'Volaxivity';
-    const volatilitySkewLabel = document.querySelector('.risk-level:nth-child(2)')?.textContent || 'Volatility Skew';
-    const putCallRatioLabel = document.querySelector('.risk-level:nth-child(3)')?.textContent || 'Put/Call Ratio';
-
-    // 销毁现有图表（如果存在）
-    if (riskChart) {
-        riskChart.destroy();
+    
+    // 检查数据有效性
+    if (!data || !data.timestamps || data.timestamps.length === 0) {
+        console.error('创建风险图表失败：无效的数据格式', data);
+        showToast('无法显示风险图表：数据格式无效', 'danger');
+        return;
     }
 
-    // 创建新图表
-    riskChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.timestamps || [],
-            datasets: [
-                {
-                    label: volaxivityLabel,
-                    data: data.volaxivity || [],
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true
-                },
-                {
-                    label: volatilitySkewLabel,
-                    data: data.volatility_skew || [],
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true
-                },
-                {
-                    label: putCallRatioLabel,
-                    data: data.put_call_ratio || [],
-                    borderColor: 'rgba(255, 206, 86, 1)',
-                    backgroundColor: 'rgba(255, 206, 86, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                },
-                title: {
-                    display: true,
-                    text: '风险指标'
-                }
+    const riskChartElement = document.getElementById('risk-chart');
+    if (!riskChartElement) {
+        console.error('找不到风险图表元素 #risk-chart');
+        return;
+    }
+
+    try {
+        const ctx = riskChartElement.getContext('2d');
+        if (!ctx) {
+            console.error('无法获取图表上下文');
+            return;
+        }
+
+        // 获取翻译后的标签
+        const volaxivityLabel = document.querySelector('.risk-level:nth-child(1)')?.textContent || 'Volaxivity';
+        const volatilitySkewLabel = document.querySelector('.risk-level:nth-child(2)')?.textContent || 'Volatility Skew';
+        const putCallRatioLabel = document.querySelector('.risk-level:nth-child(3)')?.textContent || 'Put/Call Ratio';
+
+        console.log('使用的标签:', {volaxivityLabel, volatilitySkewLabel, putCallRatioLabel});
+        console.log('图表数据长度:', {
+            timestamps: data.timestamps?.length || 0,
+            volaxivity: data.volaxivity?.length || 0,
+            volatility_skew: data.volatility_skew?.length || 0,
+            put_call_ratio: data.put_call_ratio?.length || 0
+        });
+
+        // 销毁现有图表（如果存在）
+        if (riskChart) {
+            console.log('销毁现有风险图表');
+            riskChart.destroy();
+        } else {
+            console.log('没有现有风险图表需要销毁');
+        }
+
+        // 确保全局图表对象存在
+        if (!window.chartObjects) {
+            window.chartObjects = {};
+        }
+
+        // 创建新图表
+        riskChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.timestamps || [],
+                datasets: [
+                    {
+                        label: volaxivityLabel,
+                        data: data.volaxivity || [],
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: volatilitySkewLabel,
+                        data: data.volatility_skew || [],
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: putCallRatioLabel,
+                        data: data.put_call_ratio || [],
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
             },
-            scales: {
-                x: {
-                    ticks: {
-                        maxTicksLimit: 10
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    title: {
+                        display: true,
+                        text: '风险指标'
                     }
                 },
-                y: {
-                    beginAtZero: true
+                scales: {
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 10
+                        }
+                    },
+                    y: {
+                        beginAtZero: true
+                    }
                 }
             }
-        }
-    });
+        });
+
+        // 将图表保存到全局对象中
+        window.chartObjects.riskChart = riskChart;
+        console.log('风险图表创建成功');
+    } catch (error) {
+        console.error('创建风险图表时出错:', error);
+        showToast('创建风险图表时出错: ' + error.message, 'danger');
+    }
 }
 
 // 创建反身性指标图表
 function createReflexivityChart(data) {
     console.log('创建反身性指标图表...');
-
-    const reflexivityChartElement = document.getElementById('reflexivity-chart');
-    if (!reflexivityChartElement) return;
-
-    const ctx = reflexivityChartElement.getContext('2d');
-
-    // 获取翻译后的标签
-    const reflexivityLabel = document.querySelector('.risk-level:nth-child(4)')?.textContent || 'Reflexivity Indicator';
-
-    // 销毁现有图表（如果存在）
-    if (reflexivityChart) {
-        reflexivityChart.destroy();
+    
+    // 检查数据有效性
+    if (!data || !data.timestamps || data.timestamps.length === 0) {
+        console.error('创建反身性图表失败：无效的数据格式', data);
+        showToast('无法显示反身性图表：数据格式无效', 'danger');
+        return;
     }
 
-    // 创建新图表
-    reflexivityChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.timestamps || [],
-            datasets: [
-                {
-                    label: reflexivityLabel,
-                    data: data.reflexivity_indicator || [],
-                    borderColor: 'rgba(153, 102, 255, 1)',
-                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + (context.raw * 100).toFixed(2) + '%';
-                        }
+    const reflexivityChartElement = document.getElementById('reflexivity-chart');
+    if (!reflexivityChartElement) {
+        console.error('找不到反身性图表元素 #reflexivity-chart');
+        return;
+    }
+
+    try {
+        const ctx = reflexivityChartElement.getContext('2d');
+        if (!ctx) {
+            console.error('无法获取反身性图表上下文');
+            return;
+        }
+
+        // 获取翻译后的标签
+        const reflexivityLabel = document.querySelector('.risk-level:nth-child(4)')?.textContent || 'Reflexivity Indicator';
+        
+        console.log('反身性标签:', reflexivityLabel);
+        console.log('反身性数据长度:', {
+            timestamps: data.timestamps?.length || 0,
+            reflexivity_indicator: data.reflexivity_indicator?.length || 0
+        });
+
+        // 销毁现有图表（如果存在）
+        if (reflexivityChart) {
+            console.log('销毁现有反身性图表');
+            reflexivityChart.destroy();
+        } else {
+            console.log('没有现有反身性图表需要销毁');
+        }
+
+        // 确保全局图表对象存在
+        if (!window.chartObjects) {
+            window.chartObjects = {};
+        }
+
+        // 创建新图表
+        reflexivityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.timestamps || [],
+                datasets: [
+                    {
+                        label: reflexivityLabel,
+                        data: data.reflexivity_indicator || [],
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
                     }
-                },
-                title: {
-                    display: true,
-                    text: '反身性指标'
-                }
+                ]
             },
-            scales: {
-                x: {
-                    ticks: {
-                        maxTicksLimit: 10
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                if (context.raw === null || context.raw === undefined) {
+                                    return context.dataset.label + ': N/A';
+                                }
+                                return context.dataset.label + ': ' + (context.raw * 100).toFixed(2) + '%';
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: '反身性指标'
                     }
                 },
-                y: {
-                    beginAtZero: true,
-                    max: 1,
-                    ticks: {
-                        callback: function(value) {
-                            return (value * 100).toFixed(0) + '%';
+                scales: {
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 10
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        ticks: {
+                            callback: function(value) {
+                                return (value * 100).toFixed(0) + '%';
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+
+        // 将图表保存到全局对象中
+        window.chartObjects.reflexivityChart = reflexivityChart;
+        console.log('反身性图表创建成功');
+    } catch (error) {
+        console.error('创建反身性图表时出错:', error);
+        showToast('创建反身性图表时出错: ' + error.message, 'danger');
+    }
 }
 
 // 更新风险指标和市场情绪显示
