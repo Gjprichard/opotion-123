@@ -1,16 +1,14 @@
 import os
+import logging
 
 from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-# 导入日志配置
-from utils.logging_config import configure_logging, get_logger
-
-# 设置日志
-configure_logging(log_to_file=True)
-logger = get_logger(__name__)
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class Base(DeclarativeBase):
     pass

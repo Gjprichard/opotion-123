@@ -4,12 +4,11 @@
 用于获取BTC和ETH的期权市场数据
 """
 import ccxt
+import logging
 from datetime import datetime, timedelta
 import time
 
-from utils.logging_config import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # 全局交易所实例字典
 exchanges = {

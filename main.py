@@ -3,10 +3,7 @@ from services.data_service import DataService
 from services.risk_service import RiskService
 from services.deviation_monitor_service import DeviationMonitorService
 from config import Config
-from utils.logging_config import get_logger
-
-# 获取日志记录器
-logger = get_logger(__name__)
+import logging
 
 # Create service instances for initialization
 data_service = DataService()
@@ -14,6 +11,10 @@ risk_service = RiskService()
 deviation_service = DeviationMonitorService()
 
 # Import routes later in the file to avoid circular imports
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def initialize_database():
     """
