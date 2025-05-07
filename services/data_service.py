@@ -52,32 +52,14 @@ def fetch_latest_option_data(symbol):
         all_option_data = []
         for exchange_id in enabled_exchanges:
             try:
-                import threading
-                import time
-                timeout = 30 #default timeout
-                result = []
-
-                def fetch_data():
-                    nonlocal result
-                    try:
-                        data = get_option_market_data(symbol, exchange_id)
-                        result.extend(data)
-                    except Exception as e:
-                        logger.error(f"获取{exchange_id}数据时出错: {str(e)}")
-
-                thread = threading.Thread(target=fetch_data)
-                thread.daemon = True
-                thread.start()
-                thread.join(timeout)
-
-                if thread.is_alive():
-                    logger.warning(f"获取{exchange_id}数据超时（{timeout}秒），跳过")
+                # 直接获取数据，不使用超时控制
+                result = get_option_market_data(symbol, exchange_id)
+                
+                if result:
+                    logger.info(f"Received {len(result)} option contracts for {symbol} from {exchange_id}")
+                    all_option_data.extend(result)
                 else:
-                    if result:
-                        logger.info(f"Received {len(result)} option contracts for {symbol} from {exchange_id}")
-                        all_option_data.extend(result)
-                    else:
-                        logger.warning(f"No option data received from {exchange_id} for {symbol}")
+                    logger.warning(f"No option data received from {exchange_id} for {symbol}")
             except Exception as e:
                 logger.error(f"Error fetching {symbol} data from {exchange_id}: {str(e)}")
 
