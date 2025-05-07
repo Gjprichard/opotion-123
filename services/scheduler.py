@@ -37,19 +37,6 @@ def init_scheduler(app):
     except Exception as e:
         logger.error(f"Error initializing scheduler: {str(e)}")
         
-def shutdown_scheduler():
-    """关闭调度器和所有正在运行的任务"""
-    try:
-        if scheduler.running:
-            scheduler.shutdown()
-            logger.info("调度器已成功关闭")
-        else:
-            logger.info("调度器已经处于关闭状态")
-        return True
-    except Exception as e:
-        logger.error(f"关闭调度器时出错: {str(e)}")
-        return False
-        
 def fetch_option_data():
     """只获取期权数据，不进行计算"""
     logger.info("正在执行计划任务: 获取最新期权数据")
