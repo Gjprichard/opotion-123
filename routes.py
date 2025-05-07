@@ -19,15 +19,6 @@ from translations import translations
 def index():
     return redirect(url_for('dashboard'))
 
-@app.route('/health')
-def health_check():
-    """简单的健康检查端点，确认API是否正常工作"""
-    return jsonify({
-        'status': 'ok',
-        'timestamp': datetime.utcnow().isoformat(),
-        'message': '服务正常运行中'
-    })
-
 @app.route('/dashboard')
 def dashboard():
     # 获取时间周期参数，默认为15m
