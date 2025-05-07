@@ -1,10 +1,33 @@
 import ccxt
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 
+# 导入模拟数据模块
+from services.mock_data import get_mock_price, get_mock_ohlcv, get_mock_ticker
+
+# 获取环境设置
+USE_MOCK_DATA = os.environ.get('USE_MOCK_DATA', 'false').lower() == 'true'
+
 # 配置日志
 logger = logging.getLogger(__name__)
+
+# 交易所符号映射
+EXCHANGE_SYMBOLS = {
+    'deribit': {
+        'BTC': 'BTC-PERPETUAL',
+        'ETH': 'ETH-PERPETUAL',
+    },
+    'okx': {
+        'BTC': 'BTC/USDT:USDT',  # 现货交易对
+        'ETH': 'ETH/USDT:USDT',
+    },
+    'binance': {
+        'BTC': 'BTC/USDT',
+        'ETH': 'ETH/USDT',
+    }
+}
 
 class ExchangeAPI:
     """加密货币交易所API接口类"""
@@ -20,8 +43,10 @@ class ExchangeAPI:
             # 初始化Deribit
             self.exchanges['deribit'] = ccxt.deribit({
                 'enableRateLimit': True,
+                'timeout': 30000,  # 增加超时时间
                 'options': {
-                    'defaultType': 'option'
+                    'adjustForTimeDifference': True,
+                    'recvWindow': 10000,
                 }
             })
             logger.info("Deribit交易所初始化成功")
@@ -29,8 +54,10 @@ class ExchangeAPI:
             # 初始化OKX
             self.exchanges['okx'] = ccxt.okx({
                 'enableRateLimit': True,
+                'timeout': 30000,
                 'options': {
-                    'defaultType': 'option'
+                    'adjustForTimeDifference': True,
+                    'recvWindow': 10000,
                 }
             })
             logger.info("OKX交易所初始化成功")
@@ -38,8 +65,10 @@ class ExchangeAPI:
             # 初始化Binance
             self.exchanges['binance'] = ccxt.binance({
                 'enableRateLimit': True,
+                'timeout': 30000,
                 'options': {
-                    'defaultType': 'option'
+                    'adjustForTimeDifference': True,
+                    'recvWindow': 10000,
                 }
             })
             logger.info("Binance交易所初始化成功")
@@ -189,107 +218,106 @@ class ExchangeAPI:
         
         Args:
             exchange_id: 交易所ID
-            symbol: 交易对符号
+            symbol: 交易对符号（简化格式，如'BTC'或'ETH'）
             timeframe: 时间段，例如 '1d' 表示获取1天前的收盘价
             
         Returns:
-            标的资产价格
+            标的资产价格，如果获取失败则返回None
         """
         try:
             if exchange_id not in self.exchanges:
                 logger.warning(f"不支持的交易所: {exchange_id}")
                 return None
             
+            # 标准化symbol格式
+            base_symbol = symbol.split('-')[0].split('/')[0].upper()  # 提取BTC或ETH
+            if base_symbol not in ['BTC', 'ETH']:
+                logger.warning(f"不支持的交易对符号: {symbol}")
+                return None
+                
+            # 从映射中获取对应交易所的市场符号
+            if base_symbol not in EXCHANGE_SYMBOLS.get(exchange_id, {}):
+                logger.warning(f"交易所 {exchange_id} 不支持 {base_symbol}")
+                return None
+                
+            market_symbol = EXCHANGE_SYMBOLS[exchange_id][base_symbol]
             exchange = self.exchanges[exchange_id]
+            
+            # 提前加载市场数据（某些情况下可能需要）
+            try:
+                exchange.load_markets()
+            except Exception as e:
+                logger.warning(f"加载 {exchange_id} 市场数据时出错: {str(e)}")
             
             # 如果指定了timeframe，获取历史K线数据
             if timeframe:
-                # 转换timeframe为CCXT支持的格式
-                limit = 2  # 获取2条数据确保有足够数据
-                
-                # 根据交易所格式化交易对
-                if exchange_id == 'deribit':
-                    # Deribit使用BTC-PERPETUAL或ETH-PERPETUAL格式
-                    if symbol == 'BTC' or symbol == 'BTC-USD':
-                        market_symbol = "BTC-PERPETUAL"
-                    elif symbol == 'ETH' or symbol == 'ETH-USD':
-                        market_symbol = "ETH-PERPETUAL"
-                    else:
-                        return None
-                elif exchange_id == 'okx':
-                    # OKX使用BTC-USDT-SWAP格式
-                    if symbol.startswith('BTC'):
-                        market_symbol = "BTC-USDT-SWAP"
-                    elif symbol.startswith('ETH'):
-                        market_symbol = "ETH-USDT-SWAP"
-                    else:
-                        market_symbol = f"{symbol}-USDT-SWAP"
-                elif exchange_id == 'binance':
-                    # Binance使用BTC/USDT格式
-                    if symbol.startswith('BTC'):
-                        market_symbol = "BTC/USDT"
-                    elif symbol.startswith('ETH'):
-                        market_symbol = "ETH/USDT"
-                    else:
-                        market_symbol = f"{symbol}/USDT"
-                else:
-                    return None
-                
-                # 计算时间段
-                now = datetime.utcnow()
-                if timeframe == '1d':
-                    since = int((now - timedelta(days=1)).timestamp() * 1000)
-                    ccxt_timeframe = '1d'
-                elif timeframe == '1h':
-                    since = int((now - timedelta(hours=1)).timestamp() * 1000)
-                    ccxt_timeframe = '1h'
-                else:
-                    since = int((now - timedelta(days=1)).timestamp() * 1000)
-                    ccxt_timeframe = '1d'
-                
-                # 获取历史K线数据
                 try:
-                    ohlcv = exchange.fetch_ohlcv(market_symbol, ccxt_timeframe, since, limit)
-                    if ohlcv and len(ohlcv) > 0:
-                        # 返回第一条记录的收盘价 (OHLCV中第4个元素是收盘价)
-                        return float(ohlcv[0][4])
+                    # 计算时间段
+                    now = datetime.utcnow()
+                    if timeframe == '1d':
+                        since = int((now - timedelta(days=1)).timestamp() * 1000)
+                        ccxt_timeframe = '1d'
+                    elif timeframe == '1h':
+                        since = int((now - timedelta(hours=1)).timestamp() * 1000)
+                        ccxt_timeframe = '1h'
+                    elif timeframe == '4h':
+                        since = int((now - timedelta(hours=4)).timestamp() * 1000)
+                        ccxt_timeframe = '4h'
+                    else:
+                        since = int((now - timedelta(days=1)).timestamp() * 1000)
+                        ccxt_timeframe = '1d'
+                    
+                    # 对于当前可用的K线数据，获取价格
+                    try:
+                        logger.info(f"从 {exchange_id} 获取 {market_symbol} 的历史价格数据 (时间段: {ccxt_timeframe})")
+                        ohlcv = exchange.fetch_ohlcv(market_symbol, ccxt_timeframe, since, limit=2)
+                        if ohlcv and len(ohlcv) > 0:
+                            # 返回第一条记录的收盘价 (OHLCV中第4个元素是收盘价)
+                            price = float(ohlcv[0][4])
+                            logger.info(f"获取到 {exchange_id} 的 {market_symbol} 历史价格: {price}")
+                            return price
+                        else:
+                            logger.warning(f"未获取到 {exchange_id} 的 {market_symbol} 历史K线数据")
+                    except Exception as e:
+                        logger.warning(f"获取 {exchange_id} 的 {market_symbol} 历史价格时出错: {str(e)}")
+                        
+                        # 如果实时API调用失败，可以使用模拟数据
+                        if USE_MOCK_DATA:
+                            logger.info(f"使用模拟数据获取 {base_symbol} 的历史价格")
+                            mock_ohlcv = get_mock_ohlcv(base_symbol, ccxt_timeframe, 2)
+                            if mock_ohlcv and len(mock_ohlcv) > 0:
+                                mock_price = float(mock_ohlcv[0][4])  # 收盘价
+                                logger.info(f"使用模拟的 {base_symbol} 历史价格: {mock_price}")
+                                return mock_price
                 except Exception as e:
-                    logger.warning(f"获取 {exchange_id} 的 {symbol} 历史价格时出错: {str(e)}")
-                    # 回退到获取当前价格
-                    pass
+                    logger.warning(f"处理 {exchange_id} 的 {market_symbol} 历史价格时出错: {str(e)}")
             
             # 获取当前价格
-            # 根据交易所格式化交易对
-            if exchange_id == 'deribit':
-                # Deribit使用BTC-PERPETUAL或ETH-PERPETUAL格式
-                if symbol == 'BTC' or symbol == 'BTC-USD':
-                    ticker = exchange.fetch_ticker("BTC-PERPETUAL")
-                elif symbol == 'ETH' or symbol == 'ETH-USD':
-                    ticker = exchange.fetch_ticker("ETH-PERPETUAL")
+            try:
+                logger.info(f"从 {exchange_id} 获取 {market_symbol} 的当前价格")
+                ticker = exchange.fetch_ticker(market_symbol)
+                if ticker and 'last' in ticker and ticker['last']:
+                    price = float(ticker['last'])
+                    logger.info(f"获取到 {exchange_id} 的 {market_symbol} 当前价格: {price}")
+                    return price
                 else:
-                    return None
-                return float(ticker['last'])
+                    logger.warning(f"未获取到 {exchange_id} 的 {market_symbol} 价格数据")
+            except Exception as e:
+                logger.error(f"获取 {exchange_id} 的 {market_symbol} 当前价格时出错: {str(e)}")
                 
-            elif exchange_id == 'okx':
-                # OKX使用BTC-USDT-SWAP格式
-                if symbol.startswith('BTC'):
-                    ticker = exchange.fetch_ticker("BTC-USDT-SWAP")
-                elif symbol.startswith('ETH'):
-                    ticker = exchange.fetch_ticker("ETH-USDT-SWAP")
-                else:
-                    ticker = exchange.fetch_ticker(f"{symbol}-USDT-SWAP")
-                return float(ticker['last'])
-                
-            elif exchange_id == 'binance':
-                # Binance使用BTC/USDT格式
-                if symbol.startswith('BTC'):
-                    ticker = exchange.fetch_ticker("BTC/USDT")
-                elif symbol.startswith('ETH'):
-                    ticker = exchange.fetch_ticker("ETH/USDT")
-                else:
-                    ticker = exchange.fetch_ticker(f"{symbol}/USDT")
-                return float(ticker['last'])
+                # 如果实时API调用失败，可以使用模拟数据
+                if USE_MOCK_DATA:
+                    logger.info(f"使用模拟数据获取 {base_symbol} 的当前价格")
+                    mock_price = get_mock_price(base_symbol, True)
+                    logger.info(f"使用模拟的 {base_symbol} 当前价格: {mock_price}")
+                    return mock_price
             
+            # 如果所有方法都失败，返回模拟价格或None
+            if USE_MOCK_DATA:
+                mock_price = get_mock_price(base_symbol, False)
+                logger.info(f"所有实时数据获取方法失败，使用基础模拟价格: {mock_price}")
+                return mock_price
+                
             return None
             
         except Exception as e:
@@ -298,13 +326,15 @@ class ExchangeAPI:
     
     def _format_symbol(self, exchange_id: str, symbol: str) -> str:
         """根据交易所格式化交易对符号"""
-        if exchange_id == 'deribit':
+        # 标准化符号格式：移除可能的后缀，只保留基础货币符号
+        base_symbol = symbol.split('-')[0].split('/')[0].upper()
+        
+        if base_symbol not in ['BTC', 'ETH']:
+            logger.warning(f"不支持的币种: {symbol}，将使用原始符号")
             return symbol
-        elif exchange_id == 'okx':
-            return symbol
-        elif exchange_id == 'binance':
-            return symbol
-        return symbol
+        
+        # 返回标准化的符号
+        return base_symbol
     
     def _get_option_ticker(self, exchange_id: str, symbol: str) -> Dict[str, Any]:
         """获取期权合约的行情数据"""
