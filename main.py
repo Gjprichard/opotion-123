@@ -54,4 +54,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     # Make sure to run the server so it's accessible externally
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True, use_reloader=True)
